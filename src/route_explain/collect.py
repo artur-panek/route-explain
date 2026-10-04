@@ -36,20 +36,51 @@ def _run_ip(*args: str) -> list[dict[str, Any]]:
     return payload
 
 
-def collect_route_get(flow: Flow) -> list[dict[str, Any]]:
-    args = ["route", "get", flow.destination]
+def route_get_args(flow: Flow, *, fibmatch: bool = False) -> list[str]:
+    args = ["route", "get"]
+    if fibmatch:
+        args.append("fibmatch")
+    args.append(flow.destination)
+
     if flow.source:
         args.extend(["from", flow.source])
-    return _run_ip(*args)
+    if flow.iif:
+        args.extend(["iif", flow.iif])
+    if flow.oif:
+        args.extend(["oif", flow.oif])
+    if flow.mark is not None:
+        args.extend(["mark", hex(flow.mark)])
+    if flow.tos is not None:
+        args.extend(["tos", hex(flow.tos)])
+    if flow.vrf:
+        args.extend(["vrf", flow.vrf])
+
+    # Transport selectors only make sense when iproute2 also knows the L4 protocol.
+    if flow.source_port is not None or flow.destination_port is not None:
+        args.extend(["ipproto", flow.protocol])
+        if flow.source_port is not None:
+            args.extend(["sport", str(flow.source_port)])
+        if flow.destination_port is not None:
+            args.extend(["dport", str(flow.destination_port)])
+
+    return args
 
 
-def collect_rules() -> list[dict[str, Any]]:
-    return _run_ip("rule", "show")
+def collect_route_get(flow: Flow, *, fibmatch: bool = False) -> list[dict[str, Any]]:
+    return _run_ip(*route_get_args(flow, fibmatch=fibmatch))
 
 
-def collect_routes() -> list[dict[str, Any]]:
-    return _run_ip("route", "show", "table", "all")
+def _family_flag(flow: Flow) -> str:
+    return "-6" if ":" in flow.destination else "-4"
+
+
+def collect_rules(flow: Flow) -> list[dict[str, Any]]:
+    return _run_ip(_family_flag(flow), "rule", "show")
+
+
+def collect_routes(flow: Flow) -> list[dict[str, Any]]:
+    return _run_ip(_family_flag(flow), "route", "show", "table", "all")
 
 
 def collect_links() -> list[dict[str, Any]]:
-    return _run_ip("link", "show")
+    return _run_ip("-d", "link", "show")
