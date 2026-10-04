@@ -128,11 +128,11 @@ It starts `nft -j monitor trace`, filters events for the requested flow, and sur
 It does not add `meta nftrace set 1`, modify the ruleset, or generate traffic. Automatic trace setup would be a mutation and therefore requires a future explicit opt-in workflow rather than happening behind a diagnostic command.
 
 
-## Cross-layer correlation direction
+## Cross-layer correlation
 
-The next major design step is runtime correlation across nftables and routing.
+v0.4 introduces runtime correlation across nftables and routing.
 
-When nft trace evidence exposes a packet mark, input interface, hook, or a mark transition, route-explain can correlate that observed state with a second kernel route lookup using the observed selectors. The output can then explain that an observed firewall state change altered the RPDB/FIB result.
+When nft trace evidence exposes a packet mark or named input interface, route-explain can correlate that observed state with a second kernel route lookup using those observed selectors. The output compares that probe with the baseline RPDB/FIB result.
 
 The correlation must preserve provenance:
 
@@ -142,3 +142,9 @@ The correlation must preserve provenance:
 4. comparison between the two lookups: derived explanation.
 
 A missing trace event, missing mark, or ambiguous hook must remain a CHECK. The project should never reconstruct an invisible packet transformation just because a plausible rule exists.
+
+### Correlation boundary
+
+The re-lookup is a probe, not a claim that a reroute happened at the observed nftables hook. Output-interface evidence is retained as context but is not forced into the probe. This avoids feeding an output of route selection back into the lookup as though it were an input.
+
+The implementation intentionally deduplicates unchanged mark/iif observations so repeated trace events do not produce misleadingly repetitive kernel probes.

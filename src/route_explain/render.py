@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 from dataclasses import asdict
 
@@ -35,12 +36,26 @@ def _flow_context(report: Report) -> list[str]:
     return parts
 
 
+def _canonical_prefix(value: str, version: int) -> str:
+    if value == "default":
+        value = "0.0.0.0/0" if version == 4 else "::/0"
+    return str(ipaddress.ip_network(value, strict=False))
+
+
 def _route_is_selected(report: Report, route: Route) -> bool:
     decision = report.decision
     if route.table != decision.table:
         return False
-    if decision.matched_prefix is not None and route.destination != decision.matched_prefix:
-        return False
+    if decision.matched_prefix is not None:
+        version = ipaddress.ip_address(report.flow.destination).version
+        try:
+            if _canonical_prefix(route.destination, version) != _canonical_prefix(
+                decision.matched_prefix, version
+            ):
+                return False
+        except ValueError:
+            if route.destination != decision.matched_prefix:
+                return False
     if decision.dev and route.dev != decision.dev:
         return False
     return not decision.gateway or route.gateway == decision.gateway

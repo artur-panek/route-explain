@@ -130,10 +130,15 @@ def _selector_result(item: dict[str, Any], flow: Flow) -> tuple[bool | None, tup
 
     version = ipaddress.ip_address(flow.destination).version
     unknown: list[str] = []
+    source_selector = _rule_prefix(item, "src", version)
+    destination_selector = _rule_prefix(item, "dst", version)
     results: list[bool] = [
-        _address_matches(_rule_prefix(item, "src", version), flow.source, version),
-        _address_matches(_rule_prefix(item, "dst", version), flow.destination, version),
+        _address_matches(destination_selector, flow.destination, version),
     ]
+    if source_selector not in {"all", "default"} and flow.source is None:
+        unknown.append("src")
+    else:
+        results.append(_address_matches(source_selector, flow.source, version))
 
     if "iif" in item:
         if flow.iif is None:

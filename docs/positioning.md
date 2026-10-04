@@ -54,9 +54,9 @@ route-explain aims to give the operator a reviewable chain of evidence for one n
 5. **Correlation over guesswork.** Cross-layer conclusions require evidence from each layer.
 6. **Unknown is a valid result.** Missing evidence must remain missing.
 
-## Near-term differentiator
+## Current differentiator
 
-The strongest next step is cross-layer packet-path correlation:
+v0.4 implements the first cross-layer packet-path correlation path:
 
 ```text
 nft runtime trace
@@ -72,4 +72,4 @@ FIB result
 before/after explanation
 ```
 
-This keeps route-explain in the forensic role: it does not manufacture packet state, but when runtime evidence exposes packet state, it can ask the kernel what that state means for routing.
+This keeps route-explain in the forensic role: it does not manufacture packet state. When runtime evidence exposes mark/input-interface state, it asks the kernel what that observed state means for routing and labels the result as a correlated probe rather than an asserted reroute.

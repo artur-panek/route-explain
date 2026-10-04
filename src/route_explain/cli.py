@@ -7,8 +7,10 @@ import sys
 from typing import Any
 
 from . import __version__
+from .analyze import table_name
 from .collect import CollectionError
 from .context import ContextError, resolve_context
+from .correlation import correlate_trace, render_correlation
 from .diffing import diff_snapshots, render_diff, render_diff_json
 from .doctor import doctor, render_doctor, render_doctor_json
 from .model import Flow, Report
@@ -60,6 +62,44 @@ def _mark(value: str) -> int:
 
 def _tos(value: str) -> int:
     return _uint(value, bits=8, label="tos")
+
+
+def _add_expectation_args(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group("expectations")
+    group.add_argument("--expect-dev", help="Exit 3 unless the selected output device matches.")
+    group.add_argument("--expect-table", help="Exit 3 unless the selected routing table matches.")
+    group.add_argument("--expect-prefix", help="Exit 3 unless the selected FIB prefix matches.")
+
+
+def _canonical_prefix(value: str, destination: str) -> str:
+    version = ipaddress.ip_address(destination).version
+    if value == "default":
+        value = "0.0.0.0/0" if version == 4 else "::/0"
+    return str(ipaddress.ip_network(value, strict=False))
+
+
+def _expectation_failures(report: Report, args: argparse.Namespace) -> list[str]:
+    failures: list[str] = []
+    decision = report.decision
+    expected_dev = getattr(args, "expect_dev", None)
+    expected_table = getattr(args, "expect_table", None)
+    expected_prefix = getattr(args, "expect_prefix", None)
+
+    if expected_dev and decision.dev != expected_dev:
+        failures.append(f"dev expected {expected_dev}, got {decision.dev or '-'}")
+    if expected_table and decision.table != table_name(expected_table):
+        failures.append(f"table expected {expected_table}, got {decision.table}")
+    if expected_prefix:
+        actual = decision.matched_prefix
+        try:
+            matches = actual is not None and _canonical_prefix(
+                actual, report.flow.destination
+            ) == _canonical_prefix(expected_prefix, report.flow.destination)
+        except ValueError:
+            matches = actual == expected_prefix
+        if not matches:
+            failures.append(f"prefix expected {expected_prefix}, got {actual or '?'}")
+    return failures
 
 
 def _add_context_args(parser: argparse.ArgumentParser) -> None:
@@ -171,6 +211,7 @@ def _explain_parser() -> argparse.ArgumentParser:
         metavar="DEV_OR_TABLE",
         help="Explain why a device/table route was not selected (e.g. tailscale0 or table:52).",
     )
+    _add_expectation_args(parser)
     parser.add_argument("--json", action="store_true", help="Emit machine-readable JSON.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
@@ -194,6 +235,7 @@ def _replay_parser(prog: str = "route-explain replay") -> argparse.ArgumentParse
     )
     parser.add_argument("snapshot", help="Snapshot JSON file.")
     parser.add_argument("--why-not", metavar="DEV_OR_TABLE")
+    _add_expectation_args(parser)
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -235,6 +277,11 @@ def _trace_parser() -> argparse.ArgumentParser:
         default=3.0,
         help="How long to observe nft trace events. Default: 3 seconds.",
     )
+    parser.add_argument(
+        "--correlate",
+        action="store_true",
+        help="Re-run the kernel lookup for mark/iif state actually observed in nft trace events.",
+    )
     parser.add_argument("--json", action="store_true")
     return parser
 
@@ -246,7 +293,10 @@ def _run_explain(argv: list[str]) -> int:
     snapshot = capture_snapshot(flow, context)
     report = report_from_snapshot(snapshot)
     print(_render_report(report, json_output=args.json, why_not=args.why_not))
-    return 0
+    failures = _expectation_failures(report, args)
+    for failure in failures:
+        print(f"route-explain: expectation failed: {failure}", file=sys.stderr)
+    return 3 if failures else 0
 
 
 def _run_snapshot(argv: list[str], *, alias: str = "snapshot") -> int:
@@ -267,7 +317,10 @@ def _run_replay(argv: list[str], *, alias: str = "replay") -> int:
     snapshot = load_snapshot(args.snapshot)
     report = report_from_snapshot(snapshot)
     print(_render_report(report, json_output=args.json, why_not=args.why_not))
-    return 0
+    failures = _expectation_failures(report, args)
+    for failure in failures:
+        print(f"route-explain: expectation failed: {failure}", file=sys.stderr)
+    return 3 if failures else 0
 
 
 def _run_diff(argv: list[str]) -> int:
@@ -291,11 +344,28 @@ def _run_trace(argv: list[str]) -> int:
         raise ValueError("--seconds must be greater than 0 and at most 60")
     flow = _flow_from_args(args)
     context = _context_from_args(args)
+    baseline_snapshot = capture_snapshot(flow, context) if args.correlate else None
     events = collect_nft_trace(flow, context, seconds=args.seconds)
+    correlation = (
+        correlate_trace(
+            flow,
+            events,
+            context,
+            baseline_snapshot=baseline_snapshot,
+        )
+        if args.correlate
+        else None
+    )
     if args.json:
-        print(json.dumps({"schema_version": 1, "events": events}, indent=2, sort_keys=True))
+        payload: dict[str, Any] = {"schema_version": 1, "events": events}
+        if correlation is not None:
+            payload["correlation"] = correlation
+        print(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        print(render_trace(events))
+        text = render_trace(events)
+        if correlation is not None:
+            text += "\n\n" + render_correlation(correlation)
+        print(text)
     return 0
 
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "route-explain"
-version = "0.3.0"
+version = "0.4.0"
 description = "Read-only, kernel-backed Linux routing forensics for explaining why a flow took its path."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,6 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
   "Topic :: System :: Networking",
   "Topic :: System :: Systems Administration",
 ]
@@ -28,12 +29,15 @@ classifiers = [
 Homepage = "https://artur.panek.tech/work/route-explain/"
 Repository = "https://github.com/artur-panek/route-explain"
 Issues = "https://github.com/artur-panek/route-explain/issues"
+Changelog = "https://github.com/artur-panek/route-explain/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/artur-panek/route-explain/tree/main/docs"
 
 [project.scripts]
 route-explain = "route_explain.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "ruff>=0.7"]
+release = ["build>=1.2", "twine>=6.0"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/route_explain"]
