@@ -119,13 +119,15 @@ The captured `route_get` and `fibmatch` results remain the KERNEL evidence on re
 
 This deliberately prevents replay from becoming an unverified userspace FIB/RPDB simulator.
 
-## v0.3 nftables tracing
+## nftables tracing
 
 `route-explain trace` is observational.
 
-It starts `nft -j monitor trace`, filters events for the requested flow, and surfaces chain/rule/verdict/packet-mark information where present.
+v0.4.1 consumes the native `nft monitor trace` stream. nftables emits related records with a shared trace ID: a packet record can contain the addresses, protocol, ports and interfaces needed to identify the flow, while later rule/policy/verdict records can contain the state transition of interest. route-explain first identifies matching packet trace IDs, then retains all records belonging to those IDs and normalizes them into its own stable trace schema.
 
 It does not add `meta nftrace set 1`, modify the ruleset, or generate traffic. Automatic trace setup would be a mutation and therefore requires a future explicit opt-in workflow rather than happening behind a diagnostic command.
+
+nftables reconstructs table/chain/rule text using ruleset state read when the monitor starts. If the ruleset changes while capture is running, printed rule text may become stale; this is a contextual limitation and is surfaced as a CHECK.
 
 
 ## Cross-layer correlation
@@ -148,3 +150,8 @@ A missing trace event, missing mark, or ambiguous hook must remain a CHECK. The 
 The re-lookup is a probe, not a claim that a reroute happened at the observed nftables hook. Output-interface evidence is retained as context but is not forced into the probe. This avoids feeding an output of route selection back into the lookup as though it were an input.
 
 The implementation intentionally deduplicates unchanged mark/iif observations so repeated trace events do not produce misleadingly repetitive kernel probes.
+
+
+## Protocol selector semantics
+
+Protocol is optional flow evidence. If the operator explicitly supplies `--protocol`, it is passed to the kernel lookup as `ipproto` even when no ports are supplied. If neither protocol nor ports are supplied, route-explain does not invent a protocol and protocol-specific RPDB rules stay indeterminate. Ports without an explicit protocol use TCP as the CLI/programmatic convenience default.

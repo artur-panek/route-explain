@@ -17,7 +17,7 @@ def _flow_label(report: Report) -> str:
     source = f" from {flow.source}" if flow.source else ""
     if flow.source_port is not None:
         source += f":{flow.source_port}"
-    return f"{flow.protocol} {target}{source}"
+    return f"{flow.protocol or 'ip'} {target}{source}"
 
 
 def _flow_context(report: Report) -> list[str]:

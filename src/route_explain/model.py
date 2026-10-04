@@ -11,7 +11,7 @@ EvidenceLevel = Literal["kernel", "derived", "caution"]
 class Flow:
     destination: str
     source: str | None = None
-    protocol: str = "tcp"
+    protocol: str | None = None
     destination_port: int | None = None
     source_port: int | None = None
     mark: int | None = None

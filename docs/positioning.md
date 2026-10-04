@@ -56,7 +56,7 @@ route-explain aims to give the operator a reviewable chain of evidence for one n
 
 ## Current differentiator
 
-v0.4 implements the first cross-layer packet-path correlation path:
+v0.4.1 implements the first cross-layer packet-path correlation path on top of native nftables trace records:
 
 ```text
 nft runtime trace

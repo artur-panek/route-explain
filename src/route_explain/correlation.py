@@ -16,75 +16,50 @@ CORRELATION_NOTE = (
 )
 
 
-def _as_int(value: Any) -> int | None:
-    if value is None:
-        return None
-    if isinstance(value, int):
-        return value
-    try:
-        return int(str(value).strip(), 0)
-    except ValueError:
-        return None
-
-
-def _trace_objects(event: dict[str, Any]) -> list[dict[str, Any]]:
-    objects = event.get("nftables")
-    if not isinstance(objects, list):
-        return []
-    return [
-        item["trace"]
-        for item in objects
-        if isinstance(item, dict) and isinstance(item.get("trace"), dict)
-    ]
-
-
-def _meta(trace: dict[str, Any]) -> dict[str, Any]:
-    packet = trace.get("packet")
-    if not isinstance(packet, dict):
-        return {}
-    meta = packet.get("meta")
-    return meta if isinstance(meta, dict) else {}
-
-
-def _interface(meta: dict[str, Any], name_key: str, index_key: str) -> str | None:
-    value = meta.get(name_key)
-    if isinstance(value, str) and value:
-        return value
-    value = meta.get(index_key)
-    if isinstance(value, str) and value and not value.isdigit():
-        return value
-    return None
-
-
 def extract_observations(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
     observations: list[dict[str, Any]] = []
-    last: tuple[int | None, str | None, str | None] | None = None
+    state_by_trace: dict[str, dict[str, Any]] = {}
+    last_emitted: dict[str, tuple[int | None, str | None, str | None]] = {}
 
     for event in events:
-        for trace in _trace_objects(event):
-            meta = _meta(trace)
-            observation = {
-                "mark": _as_int(meta.get("mark")),
-                "iif": _interface(meta, "iifname", "iif"),
-                "oif": _interface(meta, "oifname", "oif"),
-                "family": trace.get("family"),
-                "table": trace.get("table"),
-                "chain": trace.get("chain"),
-                "hook": trace.get("hook"),
-                "type": trace.get("type"),
-                "rule": trace.get("rule"),
+        trace_id = str(event.get("trace_id", ""))
+        state = state_by_trace.setdefault(
+            trace_id,
+            {"mark": None, "iif": None, "oif": None},
+        )
+
+        packet = event.get("packet")
+        if isinstance(packet, dict):
+            if packet.get("iif"):
+                state["iif"] = packet["iif"]
+            if packet.get("oif"):
+                state["oif"] = packet["oif"]
+
+        if isinstance(event.get("mark"), int):
+            state["mark"] = event["mark"]
+
+        selectors = (state["mark"], state["iif"], state["oif"])
+        if state["mark"] is None and state["iif"] is None:
+            continue
+        if last_emitted.get(trace_id) == selectors:
+            continue
+
+        observations.append(
+            {
+                "trace_id": trace_id,
+                "mark": state["mark"],
+                "iif": state["iif"],
+                "oif": state["oif"],
+                "family": event.get("family"),
+                "table": event.get("table"),
+                "chain": event.get("chain"),
+                "type": event.get("type"),
+                "rule": event.get("rule"),
+                "verdict": event.get("verdict"),
+                "raw": event.get("raw"),
             }
-            if observation["mark"] is None and observation["iif"] is None:
-                continue
-            selectors = (
-                observation["mark"],
-                observation["iif"],
-                observation["oif"],
-            )
-            if selectors == last:
-                continue
-            observations.append(observation)
-            last = selectors
+        )
+        last_emitted[trace_id] = selectors
 
     return observations
 
@@ -130,7 +105,7 @@ def correlate_trace(
     *,
     baseline_snapshot: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    snapshot = baseline_snapshot or capture_snapshot(flow, context)
+    snapshot = baseline_snapshot if baseline_snapshot is not None else capture_snapshot(flow, context)
     baseline = report_from_snapshot(snapshot).decision
     lookups: list[dict[str, Any]] = []
 
@@ -159,7 +134,7 @@ def correlate_trace(
         lookups.append(item)
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "baseline": asdict(baseline),
         "lookups": lookups,
         "note": CORRELATION_NOTE,
@@ -201,8 +176,6 @@ def render_correlation(correlation: dict[str, Any]) -> str:
             if value
         ) or "unknown trace context"
         lines.extend(["", f"Observation {index}", f"  TRACE {trace_context}"])
-        if obs.get("hook"):
-            lines.append(f"  TRACE hook={obs['hook']}")
         if obs.get("rule"):
             lines.append(f"  TRACE rule={obs['rule']}")
         if obs.get("mark") is not None:
