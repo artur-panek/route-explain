@@ -124,9 +124,7 @@ def _same_route(decision: RouteDecision, route: Route) -> bool:
         return False
     if decision.dev and route.dev != decision.dev:
         return False
-    if decision.gateway and route.gateway != decision.gateway:
-        return False
-    return True
+    return decision.gateway is None or route.gateway == decision.gateway
 
 
 def build_report(
@@ -157,9 +155,7 @@ def build_report(
     if other_tables:
         notes.append(f"matching routes also exist in other table(s): {', '.join(other_tables)}")
 
-    advanced_rules = [
-        rule for rule in candidate_rules if rule.selectors
-    ]
+    advanced_rules = [rule for rule in candidate_rules if rule.selectors]
     if advanced_rules:
         notes.append(
             "some candidate policy rules contain advanced selectors that v0.1 does not fully evaluate"

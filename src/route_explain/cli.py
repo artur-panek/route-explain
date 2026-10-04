@@ -5,7 +5,13 @@ import ipaddress
 import sys
 
 from .analyze import build_report
-from .collect import CollectionError, collect_links, collect_route_get, collect_routes, collect_rules
+from .collect import (
+    CollectionError,
+    collect_links,
+    collect_route_get,
+    collect_routes,
+    collect_rules,
+)
 from .model import Flow
 from .render import render_json, render_text
 
