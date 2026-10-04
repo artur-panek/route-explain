@@ -32,6 +32,7 @@ Issues = "https://github.com/artur-panek/route-explain/issues"
 Changelog = "https://github.com/artur-panek/route-explain/blob/main/CHANGELOG.md"
 Documentation = "https://github.com/artur-panek/route-explain/tree/main/docs"
 PyPI = "https://pypi.org/project/route-explain/"
+Releases = "https://github.com/artur-panek/route-explain/releases"
 
 [project.scripts]
 route-explain = "route_explain.cli:main"
