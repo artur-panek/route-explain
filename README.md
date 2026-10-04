@@ -2,7 +2,7 @@
 
 **Kernel-backed Linux routing forensics. Ask why a flow took this path.**
 
-By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/route-explain/)
+By [Artur Panek](https://artur.panek.tech/) · [PyPI](https://pypi.org/project/route-explain/) · [Project page](https://artur.panek.tech/work/route-explain/)
 
 `route-explain` is a **read-only Linux networking forensic CLI**. It asks the running kernel for the authoritative routing decision for a specific flow, then correlates RPDB, FIB, namespace, overlay, snapshot, and optional nftables trace evidence around that answer.
 
@@ -82,7 +82,9 @@ Ordinary route lookups are read-only. Some namespace and nftables operations may
 
 ## Install
 
-The first PyPI release pipeline is prepared for v0.4.0. Once the package is published, the preferred CLI installs are:
+Available on [PyPI](https://pypi.org/project/route-explain/).
+
+For a system CLI, `pipx` or `uv tool` is recommended:
 
 ```bash
 pipx install route-explain
@@ -90,7 +92,7 @@ pipx install route-explain
 uv tool install route-explain
 ```
 
-Until the first PyPI release is published, install from source:
+Install from source for development:
 
 
 
