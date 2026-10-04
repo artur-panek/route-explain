@@ -8,7 +8,7 @@ By [Artur Panek](https://artur.panek.tech/) · [PyPI](https://pypi.org/project/r
 
 It is intentionally **not** a routing controller, split-tunnel manager, background daemon, or userspace route simulator. It does not install routes, reconcile desired state, manage VPN policy, or replace the kernel with its own idea of what should have happened.
 
-> Alpha software. v0.4 adds evidence-backed nftables → kernel routing correlation, automation expectations, Python 3.14 coverage, and a Trusted Publishing release pipeline on top of the v0.3 diagnostic workflows.
+> Alpha software. v0.4.1 fixes native nftables trace ingestion and makes explicit protocol selectors reach the kernel lookup even when no ports are supplied.
 
 ## Why this is different
 
@@ -34,6 +34,7 @@ The kernel remains the routing oracle. `ip route get` and `fibmatch` establish t
 - turn incomplete state into a confident verdict.
 
 That boundary is a feature: the tool is meant to help investigate a running system without becoming another component that can change the system being investigated.
+
 ## Quick example
 
 ```console
@@ -94,8 +95,6 @@ uv tool install route-explain
 
 Install from source for development:
 
-
-
 ```bash
 git clone https://github.com/artur-panek/route-explain.git
 cd route-explain
@@ -121,7 +120,7 @@ route-explain 10.70.0.12 \
   --mark 0x42
 ```
 
-Supported kernel lookup context includes source, mark, TOS, incoming/output interface, VRF, protocol, and TCP/UDP ports.
+Supported kernel lookup context includes source, mark, TOS, incoming/output interface, VRF, protocol, and TCP/UDP ports. An explicit `--protocol` is sent to the kernel even without ports; when ports are supplied without `--protocol`, TCP is assumed.
 
 ## Automation expectations
 
@@ -267,7 +266,7 @@ sudo route-explain trace 10.70.0.12 \
   --seconds 5
 ```
 
-This runs a **read-only** `nft -j monitor trace` observer and filters trace events for the supplied flow.
+This runs a **read-only** `nft monitor trace` observer, parses nftables' native `trace id ...` records, groups related packet/rule/policy events by trace ID, and filters them to the supplied flow.
 
 Important: nftables only emits trace events for packets already marked for tracing, typically by a rule containing:
 
@@ -275,7 +274,9 @@ Important: nftables only emits trace events for packets already marked for traci
 meta nftrace set 1
 ```
 
-`route-explain` does **not** inject that rule, change the ruleset, or generate packets automatically. If trace events expose packet marks, they are surfaced next to chain/rule/verdict context.
+`route-explain` does **not** inject that rule, change the ruleset, or generate packets automatically. Native nftables trace records are normalized into route-explain's trace JSON schema. If trace events expose packet marks, they are surfaced next to chain/rule/verdict context.
+
+`nft` reconstructs printed table/chain/rule text from ruleset state read when the monitor starts, so changing the ruleset while a trace capture is running can make that printed rule text stale. route-explain surfaces this as a `CHECK` rather than silently treating it as immutable evidence.
 
 ### Correlate observed nft state with a kernel lookup
 
@@ -305,6 +306,7 @@ baseline vs observed-state comparison
 An observed output interface is shown as context but is not forced into the re-lookup, because doing so would turn an observation after route selection into an artificial input.
 
 The report also keeps an explicit caveat: a correlated re-lookup proves what the kernel returns **for that observed selector state**. It does not by itself prove that Linux actually performed a reroute at that nftables hook.
+
 ## Evidence model
 
 The human report separates three levels:
@@ -332,7 +334,7 @@ route-explain doctor --json
 route-explain trace 10.70.0.12 --json
 ```
 
-The main report JSON retains its existing schema version. Snapshot, diff, doctor, and trace payloads have their own schema/version markers.
+The main report JSON retains its existing schema version. Snapshot, diff, doctor, and trace payloads have their own schema/version markers. Native nftables trace output is normalized as trace schema version 2 with `source_format: "nft-native-trace"`.
 
 ## What v0.4 still does not claim
 

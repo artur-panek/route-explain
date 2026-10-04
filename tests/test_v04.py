@@ -5,13 +5,17 @@ from route_explain import correlation
 from route_explain.analyze import build_report, parse_rules
 from route_explain.cli import _expectation_failures
 from route_explain.context import ExecutionContext
-from route_explain.correlation import (
-    correlate_trace,
-    extract_observations,
-    render_correlation,
-)
+from route_explain.correlation import correlate_trace, extract_observations, render_correlation
 from route_explain.model import Flow, RouteDecision
+from route_explain.nfttrace import parse_native_trace_line
 from route_explain.render import render_text
+
+PACKET = (
+    'trace id 8e85e085 ip mangle PREROUTING packet: iif "lan0" '
+    'ip saddr 10.10.0.24 ip daddr 10.70.0.12 ip protocol tcp '
+    'tcp sport 50000 tcp dport 443'
+)
+MARK = 'trace id 8e85e085 ip mangle PREROUTING verdict continue mark 0x42'
 
 
 def _report():
@@ -25,22 +29,15 @@ def _report():
     )
 
 
-def _trace_event(mark="0x42", iif="lan0"):
-    return {
-        "nftables": [
-            {
-                "trace": {
-                    "type": "rule",
-                    "family": "ip",
-                    "table": "mangle",
-                    "chain": "prerouting",
-                    "hook": "prerouting",
-                    "rule": "meta mark set 0x42",
-                    "packet": {"meta": {"mark": mark, "iifname": iif}},
-                }
-            }
-        ]
-    }
+def _native_events():
+    return [
+        event
+        for event in (
+            parse_native_trace_line(PACKET),
+            parse_native_trace_line(MARK),
+        )
+        if event is not None
+    ]
 
 
 def test_source_specific_rule_without_source_is_maybe():
@@ -85,12 +82,12 @@ def test_expectations_surface_mismatch():
     ]
 
 
-def test_trace_observations_are_route_relevant_and_deduplicated():
-    events = [_trace_event(), _trace_event()]
-    observations = extract_observations(events)
-    assert len(observations) == 1
-    assert observations[0]["mark"] == 0x42
+def test_trace_observations_carry_interface_state_into_mark_event():
+    observations = extract_observations(_native_events())
+    assert observations[0]["mark"] is None
     assert observations[0]["iif"] == "lan0"
+    assert observations[-1]["mark"] == 0x42
+    assert observations[-1]["iif"] == "lan0"
 
 
 def test_correlate_trace_reuses_observed_mark_for_kernel_probe(monkeypatch):
@@ -117,23 +114,32 @@ def test_correlate_trace_reuses_observed_mark_for_kernel_probe(monkeypatch):
         lambda snapshot: SimpleNamespace(decision=baseline),
     )
 
+    probed = []
+
     def fake_probe(flow, context, baseline_snapshot):
-        assert flow.mark == 0x42
-        assert flow.iif == "lan0"
-        return changed
+        probed.append(flow)
+        return changed if flow.mark == 0x42 else baseline
 
     monkeypatch.setattr(correlation, "_probe", fake_probe)
 
     result = correlate_trace(
-        Flow(destination="10.70.0.12"),
-        [_trace_event()],
+        Flow(
+            destination="10.70.0.12",
+            source="10.10.0.24",
+            protocol="tcp",
+            source_port=50000,
+            destination_port=443,
+        ),
+        _native_events(),
         ExecutionContext(),
         baseline_snapshot={},
     )
 
-    assert result["lookups"][0]["decision_changed"] is True
-    assert result["lookups"][0]["lookup_flow"]["mark"] == 0x42
-    assert result["lookups"][0]["decision"]["dev"] == "tailscale0"
+    assert probed[-1].mark == 0x42
+    assert probed[-1].iif == "lan0"
+    assert result["lookups"][-1]["decision_changed"] is True
+    assert result["lookups"][-1]["decision"]["dev"] == "tailscale0"
+    assert result["schema_version"] == 2
 
 
 def test_correlation_output_keeps_forensic_caveat():

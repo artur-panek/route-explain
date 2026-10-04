@@ -124,8 +124,8 @@ def _add_flow_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--protocol",
         choices=("tcp", "udp", "icmp", "icmpv6"),
-        default="tcp",
-        help="L4 protocol. Used by kernel lookup when a port is supplied. Default: tcp.",
+        default=None,
+        help="L4 protocol. If a port is supplied without this flag, tcp is assumed.",
     )
     parser.add_argument(
         "--port",
@@ -153,15 +153,16 @@ def _flow_from_args(args: argparse.Namespace) -> Flow:
         if source_version != destination_version:
             raise ValueError("source and destination address families differ")
 
-    if (
-        args.source_port is not None or args.destination_port is not None
-    ) and args.protocol not in {"tcp", "udp"}:
-        raise ValueError("ports require --protocol tcp or udp")
+    protocol = args.protocol
+    if args.source_port is not None or args.destination_port is not None:
+        protocol = protocol or "tcp"
+        if protocol not in {"tcp", "udp"}:
+            raise ValueError("ports require --protocol tcp or udp")
 
     return Flow(
         destination=args.destination,
         source=args.source,
-        protocol=args.protocol,
+        protocol=protocol,
         destination_port=args.destination_port,
         source_port=args.source_port,
         mark=args.mark,
@@ -357,7 +358,11 @@ def _run_trace(argv: list[str]) -> int:
         else None
     )
     if args.json:
-        payload: dict[str, Any] = {"schema_version": 1, "events": events}
+        payload: dict[str, Any] = {
+            "schema_version": 2,
+            "source_format": "nft-native-trace",
+            "events": events,
+        }
         if correlation is not None:
             payload["correlation"] = correlation
         print(json.dumps(payload, indent=2, sort_keys=True))

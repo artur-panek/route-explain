@@ -65,3 +65,31 @@ def test_family_specific_collectors_are_selected_from_destination(monkeypatch):
         ("-6", "rule", "show"),
         ("-4", "route", "show", "table", "all"),
     ]
+
+def test_explicit_protocol_is_sent_without_ports():
+    flow = Flow(destination="192.0.2.10", protocol="udp")
+    assert route_get_args(flow) == [
+        "route",
+        "get",
+        "192.0.2.10",
+        "ipproto",
+        "udp",
+    ]
+
+
+def test_unspecified_protocol_is_not_forced_without_ports():
+    flow = Flow(destination="192.0.2.10")
+    assert route_get_args(flow) == ["route", "get", "192.0.2.10"]
+
+
+def test_ports_default_to_tcp_for_programmatic_flow():
+    flow = Flow(destination="192.0.2.10", destination_port=443)
+    assert route_get_args(flow) == [
+        "route",
+        "get",
+        "192.0.2.10",
+        "ipproto",
+        "tcp",
+        "dport",
+        "443",
+    ]

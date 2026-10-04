@@ -4,10 +4,19 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 0.4.1
+
+- fix nftables tracing to consume the native `nft monitor trace` `trace id ...` stream instead of assuming JSON trace notifications;
+- normalize packet/rule/policy/mark events into route-explain trace schema v2 and retain all events belonging to a matching trace ID;
+- carry observed input/output interface state forward to later mark events for correlation;
+- surface nftables' monitor-start ruleset-cache limitation as a `CHECK`;
+- send an explicit `--protocol` to the kernel lookup even when no ports are supplied;
+- stop implicitly forcing TCP when neither protocol nor ports were requested; ports without `--protocol` still default to TCP;
+- add regression fixtures based on native nftables trace output and protocol-only kernel lookups.
+
 ## 0.4.0
 
 - publish the first route-explain release on PyPI through GitHub OIDC Trusted Publishing;
-
 - add `trace --correlate` to extract observed nftables packet mark/input-interface state and run a kernel-backed routing probe with those selectors;
 - compare correlated kernel decisions with the baseline lookup while preserving an explicit no-fake-reroute caveat;
 - add `--expect-dev`, `--expect-table`, and `--expect-prefix` assertions with exit status 3 for automation;

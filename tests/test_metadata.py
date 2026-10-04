@@ -9,5 +9,5 @@ def test_package_version_matches_pyproject():
     assert route_explain.__version__ == metadata["project"]["version"]
 
 
-def test_release_version_is_v04():
-    assert route_explain.__version__ == "0.4.0"
+def test_release_version_is_v041():
+    assert route_explain.__version__ == "0.4.1"

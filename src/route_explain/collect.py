@@ -68,12 +68,17 @@ def route_get_args(flow: Flow, *, fibmatch: bool = False) -> list[str]:
         args.extend(["tos", hex(flow.tos)])
     if flow.vrf:
         args.extend(["vrf", flow.vrf])
-    if flow.source_port is not None or flow.destination_port is not None:
-        args.extend(["ipproto", flow.protocol])
-        if flow.source_port is not None:
-            args.extend(["sport", str(flow.source_port)])
-        if flow.destination_port is not None:
-            args.extend(["dport", str(flow.destination_port)])
+    protocol = flow.protocol
+    if protocol is None and (
+        flow.source_port is not None or flow.destination_port is not None
+    ):
+        protocol = "tcp"
+    if protocol is not None:
+        args.extend(["ipproto", protocol])
+    if flow.source_port is not None:
+        args.extend(["sport", str(flow.source_port)])
+    if flow.destination_port is not None:
+        args.extend(["dport", str(flow.destination_port)])
     return args
 
 
