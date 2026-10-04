@@ -25,5 +25,5 @@ def test_text_output_explains_match_semantics():
 
 def test_json_output_has_schema_version():
     payload = json.loads(render_json(_report()))
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert payload["decision"]["matched_prefix"] == "192.0.2.0/24"

@@ -5,6 +5,17 @@ from typing import Any, Literal
 
 RuleCertainty = Literal["match", "indeterminate"]
 EvidenceLevel = Literal["kernel", "derived", "caution"]
+FindingLevel = Literal["ok", "info", "check"]
+
+
+@dataclass(frozen=True, slots=True)
+class NamespaceTarget:
+    kind: Literal["netns", "pid"]
+    value: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.kind}:{self.value}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +33,6 @@ class Flow:
 
     @property
     def port(self) -> int | None:
-        """Backward-compatible alias for the original v0.1 field name."""
         return self.destination_port
 
 
@@ -74,6 +84,15 @@ class Evidence:
     message: str
 
 
+@dataclass(frozen=True, slots=True)
+class OverlayRoute:
+    kind: Literal["wireguard", "tailscale"]
+    interface: str
+    prefix: str
+    peer: str | None = None
+    source: str | None = None
+
+
 @dataclass(slots=True)
 class Report:
     flow: Flow
@@ -83,3 +102,51 @@ class Report:
     overlays: list[str]
     evidence: list[Evidence]
     notes: list[str]
+    overlay_routes: list[OverlayRoute] = field(default_factory=list)
+    namespace: str | None = None
+
+
+@dataclass(slots=True)
+class ContextReport:
+    flow: Flow
+    candidate_rules: list[PolicyRule]
+    matching_routes: list[Route]
+    overlays: list[str]
+    evidence: list[Evidence]
+    notes: list[str]
+    overlay_routes: list[OverlayRoute] = field(default_factory=list)
+    namespace: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class WhyNotResult:
+    target: str
+    status: Literal["selected", "available", "missing", "uncertain"]
+    evidence: tuple[Evidence, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class DoctorFinding:
+    level: FindingLevel
+    code: str
+    message: str
+
+
+@dataclass(frozen=True, slots=True)
+class TraceEvent:
+    trace_id: str | None
+    family: str | None
+    table: str | None
+    chain: str | None
+    event: str | None
+    verdict: str | None
+    raw: dict[str, Any]
+
+
+@dataclass(slots=True)
+class TraceReport:
+    events: list[TraceEvent]
+    notes: list[str]
+    armed: bool = False
+    command_exit_code: int | None = None
+    namespace: str | None = None
