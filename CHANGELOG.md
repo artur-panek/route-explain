@@ -6,6 +6,8 @@ All notable user-facing changes are documented here.
 
 ## 0.4.0
 
+- publish the first route-explain release on PyPI through GitHub OIDC Trusted Publishing;
+
 - add `trace --correlate` to extract observed nftables packet mark/input-interface state and run a kernel-backed routing probe with those selectors;
 - compare correlated kernel decisions with the baseline lookup while preserving an explicit no-fake-reroute caveat;
 - add `--expect-dev`, `--expect-table`, and `--expect-prefix` assertions with exit status 3 for automation;
