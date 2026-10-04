@@ -1,15 +1,39 @@
 # route-explain
 
-**`EXPLAIN`, but for the Linux routing stack.**
+**Kernel-backed Linux routing forensics. Ask why a flow took this path.**
 
 By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/route-explain/)
 
-`route-explain` asks the running Linux kernel how it will route a specific flow, then explains the RPDB, FIB, namespace, and overlay context around that decision.
+`route-explain` is a **read-only Linux networking forensic CLI**. It asks the running kernel for the authoritative routing decision for a specific flow, then correlates RPDB, FIB, namespace, overlay, snapshot, and optional nftables trace evidence around that answer.
 
-It is not a prettier `traceroute`, and it does not reimplement the kernel's route selection in Python. It is for the annoying cases where policy routing, multiple tables, VPNs, containers, marks, and overlays all look plausible at once.
+It is intentionally **not** a routing controller, split-tunnel manager, background daemon, or userspace route simulator. It does not install routes, reconcile desired state, manage VPN policy, or replace the kernel with its own idea of what should have happened.
 
-> Alpha software. v0.3 adds flow snapshots, replay/diff, network-namespace execution, `--why-not`, a routing doctor, WireGuard/Tailscale context, and read-only nftables trace observation.
+> Alpha software. v0.3 provides flow snapshots, replay/diff, network-namespace execution, `--why-not`, a routing doctor, WireGuard/Tailscale context, and read-only nftables trace observation.
 
+## Why this is different
+
+The project sits between low-level networking primitives and control-plane software:
+
+| Tool category | Typical job | `route-explain` |
+| --- | --- | --- |
+| `iproute2` | expose authoritative kernel routing state and lookups | uses those primitives as evidence, then explains and correlates them |
+| routing / split-tunnel controllers | install routes, manage policy, run daemons, reconcile state | **does not control routing state** |
+| userspace route simulators | calculate what route should win from a state dump | **does not replace the kernel decision** |
+| network troubleshooting toolboxes | collect many useful commands in one environment | builds one flow-scoped explanation with explicit evidence levels |
+
+The kernel remains the routing oracle. `ip route get` and `fibmatch` establish the selected path; everything else is labelled as context, inference, or a limitation.
+
+### Non-goals
+
+`route-explain` is deliberately not trying to:
+
+- install, remove, or reconcile routes;
+- manage VPN or split-tunnel policy;
+- run a persistent privileged daemon;
+- emulate the full Linux RPDB/FIB decision tree in userspace;
+- turn incomplete state into a confident verdict.
+
+That boundary is a feature: the tool is meant to help investigate a running system without becoming another component that can change the system being investigated.
 ## Quick example
 
 ```console
@@ -226,6 +250,23 @@ meta nftrace set 1
 
 `route-explain` does **not** inject that rule, change the ruleset, or generate packets automatically. If trace events expose packet marks, they are surfaced next to chain/rule/verdict context.
 
+## Direction: cross-layer packet-path correlation
+
+The next major direction is to correlate evidence across layers without turning correlation into simulation:
+
+```text
+nft runtime trace
+      ↓
+observed packet mark / interface / hook
+      ↓
+kernel route lookup with the observed selectors
+      ↓
+RPDB candidate context
+      ↓
+selected FIB prefix and output device
+```
+
+The important part is the word **observed**. If nftables runtime evidence shows a mark transition, a future correlation pass can ask the kernel how that observed state changes the lookup and explain the hand-off from firewall processing to policy routing. If the trace does not expose enough evidence, the report must stay incomplete rather than invent a packet path.
 ## Evidence model
 
 The human report separates three levels:
@@ -282,6 +323,7 @@ Snapshots are flow-scoped specifically to avoid turning replay into an invented 
 - [x] WireGuard `AllowedIPs` context
 - [x] Tailscale peer/subnet-route context
 - [x] read-only nftables trace observation
+- [ ] correlate nft trace → observed mark/interface → kernel re-lookup → RPDB/FIB result
 - [ ] richer VRF/l3mdev explanation
 - [ ] conntrack/NAT correlation
 - [ ] opt-in assisted nft trace setup with explicit confirmation
@@ -295,7 +337,7 @@ ruff check .
 pytest
 ```
 
-See [`docs/design.md`](docs/design.md) for the evidence model and [`docs/snapshots.md`](docs/snapshots.md) for snapshot semantics.
+See [`docs/design.md`](docs/design.md) for the evidence model, [`docs/positioning.md`](docs/positioning.md) for the product boundary, and [`docs/snapshots.md`](docs/snapshots.md) for snapshot semantics.
 
 ## License
 

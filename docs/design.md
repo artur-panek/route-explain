@@ -6,6 +6,27 @@ Linux routing may involve the RPDB, multiple FIB tables, marks, interfaces, VRFs
 
 `route-explain` therefore treats the running kernel as the routing oracle and builds an explanation around its answer.
 
+## Product boundary: forensic layer, not control plane
+
+`route-explain` is designed as an observational layer over Linux networking.
+
+It does not maintain desired routing state, install policy, reconcile VPN routes, or run a background routing daemon. Those are control-plane responsibilities. Mixing them into the same process that explains a fault would make the diagnostic tool part of the system it is diagnosing.
+
+It also does not treat a route/rule dump as sufficient input for an authoritative userspace routing simulator. Linux remains the oracle for the selected path.
+
+The intended architecture is:
+
+```text
+kernel/runtime evidence
+        ↓
+normalization
+        ↓
+correlation
+        ↓
+KERNEL / INFO / CHECK explanation
+```
+
+This is closer to forensics and observability than to routing management.
 ## Evidence levels
 
 ### KERNEL
@@ -105,3 +126,19 @@ This deliberately prevents replay from becoming an unverified userspace FIB/RPDB
 It starts `nft -j monitor trace`, filters events for the requested flow, and surfaces chain/rule/verdict/packet-mark information where present.
 
 It does not add `meta nftrace set 1`, modify the ruleset, or generate traffic. Automatic trace setup would be a mutation and therefore requires a future explicit opt-in workflow rather than happening behind a diagnostic command.
+
+
+## Cross-layer correlation direction
+
+The next major design step is runtime correlation across nftables and routing.
+
+When nft trace evidence exposes a packet mark, input interface, hook, or a mark transition, route-explain can correlate that observed state with a second kernel route lookup using the observed selectors. The output can then explain that an observed firewall state change altered the RPDB/FIB result.
+
+The correlation must preserve provenance:
+
+1. nftables event: runtime evidence;
+2. observed mark/interface: extracted fact;
+3. second `ip route get`: new kernel evidence;
+4. comparison between the two lookups: derived explanation.
+
+A missing trace event, missing mark, or ambiguous hook must remain a CHECK. The project should never reconstruct an invisible packet transformation just because a plausible rule exists.
