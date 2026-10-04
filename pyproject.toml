@@ -5,12 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "route-explain"
 version = "0.3.0"
-description = "Explain Linux routing decisions with kernel-backed RPDB, FIB, namespace and overlay evidence."
+description = "Read-only, kernel-backed Linux routing forensics for explaining why a flow took its path."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Artur Panek" }]
-keywords = ["linux", "networking", "routing", "iproute2", "policy-routing", "tailscale", "wireguard", "netns", "nftables", "debugging", "cli"]
+keywords = ["linux", "networking", "routing", "forensics", "observability", "read-only", "iproute2", "policy-routing", "tailscale", "wireguard", "netns", "nftables", "debugging", "cli"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",

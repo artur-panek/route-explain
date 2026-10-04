@@ -2,6 +2,12 @@
 
 All notable user-facing changes are documented here.
 
+## Unreleased
+
+- reposition the project explicitly as read-only, kernel-backed Linux routing forensics rather than a routing controller or userspace simulator;
+- document the product boundary, non-goals, and the next cross-layer nftables → RPDB/FIB correlation direction;
+- align package metadata and contributor guidance with the evidence-first, non-mutating design.
+
 ## 0.3.0
 
 - add flow-scoped snapshot capture and evidence-only replay;
