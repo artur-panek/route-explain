@@ -4,9 +4,17 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 0.4.0
+
+- add `trace --correlate` to extract observed nftables packet mark/input-interface state and run a kernel-backed routing probe with those selectors;
+- compare correlated kernel decisions with the baseline lookup while preserving an explicit no-fake-reroute caveat;
+- add `--expect-dev`, `--expect-table`, and `--expect-prefix` assertions with exit status 3 for automation;
+- treat source-specific RPDB rules as `MAYBE` when source context is missing instead of silently discarding them;
+- treat `default` and `0.0.0.0/0` / `::/0` as equivalent when marking the selected route;
+- add Python 3.14 CI coverage and package build/sdist/wheel smoke testing;
+- add a PyPI Trusted Publishing workflow using GitHub OIDC with no long-lived PyPI token;
 - reposition the project explicitly as read-only, kernel-backed Linux routing forensics rather than a routing controller or userspace simulator;
-- document the product boundary, non-goals, and the next cross-layer nftables → RPDB/FIB correlation direction;
-- align package metadata and contributor guidance with the evidence-first, non-mutating design.
+- document the product boundary and align package/contributor guidance with the evidence-first, non-mutating design.
 
 ## 0.3.0
 

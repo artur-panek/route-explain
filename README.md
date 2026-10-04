@@ -8,7 +8,7 @@ By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.pane
 
 It is intentionally **not** a routing controller, split-tunnel manager, background daemon, or userspace route simulator. It does not install routes, reconcile desired state, manage VPN policy, or replace the kernel with its own idea of what should have happened.
 
-> Alpha software. v0.3 provides flow snapshots, replay/diff, network-namespace execution, `--why-not`, a routing doctor, WireGuard/Tailscale context, and read-only nftables trace observation.
+> Alpha software. v0.4 adds evidence-backed nftables → kernel routing correlation, automation expectations, Python 3.14 coverage, and a Trusted Publishing release pipeline on top of the v0.3 diagnostic workflows.
 
 ## Why this is different
 
@@ -80,7 +80,19 @@ The selected path is kernel evidence. Routes in other tables are context, not a 
 
 Ordinary route lookups are read-only. Some namespace and nftables operations may require privileges depending on the host.
 
-## Install from source
+## Install
+
+The first PyPI release pipeline is prepared for v0.4.0. Once the package is published, the preferred CLI installs are:
+
+```bash
+pipx install route-explain
+# or
+uv tool install route-explain
+```
+
+Until the first PyPI release is published, install from source:
+
+
 
 ```bash
 git clone https://github.com/artur-panek/route-explain.git
@@ -108,6 +120,19 @@ route-explain 10.70.0.12 \
 ```
 
 Supported kernel lookup context includes source, mark, TOS, incoming/output interface, VRF, protocol, and TCP/UDP ports.
+
+## Automation expectations
+
+A live lookup can also act as a routing assertion. A mismatch exits with status **3**, distinct from collection/input errors (status 2):
+
+```bash
+route-explain 10.70.0.12 \
+  --expect-dev tailscale0 \
+  --expect-table 52 \
+  --expect-prefix 10.70.0.0/24
+```
+
+This is useful in smoke tests, VPN checks and network-change validation without turning route-explain into a routing controller.
 
 ## Why not this route?
 
@@ -250,23 +275,34 @@ meta nftrace set 1
 
 `route-explain` does **not** inject that rule, change the ruleset, or generate packets automatically. If trace events expose packet marks, they are surfaced next to chain/rule/verdict context.
 
-## Direction: cross-layer packet-path correlation
+### Correlate observed nft state with a kernel lookup
 
-The next major direction is to correlate evidence across layers without turning correlation into simulation:
+```bash
+sudo route-explain trace 10.70.0.12 \
+  --from 10.10.0.24 \
+  --seconds 5 \
+  --correlate
+```
+
+With `--correlate`, route-explain extracts **observed** routing-relevant state from matching nft trace events (currently packet mark and named input interface), then asks the kernel again using those observed selectors:
 
 ```text
 nft runtime trace
       ↓
-observed packet mark / interface / hook
+observed mark / iif
       ↓
-kernel route lookup with the observed selectors
+kernel re-lookup with observed selectors
       ↓
-RPDB candidate context
+RPDB context
       ↓
-selected FIB prefix and output device
+selected FIB result
+      ↓
+baseline vs observed-state comparison
 ```
 
-The important part is the word **observed**. If nftables runtime evidence shows a mark transition, a future correlation pass can ask the kernel how that observed state changes the lookup and explain the hand-off from firewall processing to policy routing. If the trace does not expose enough evidence, the report must stay incomplete rather than invent a packet path.
+An observed output interface is shown as context but is not forced into the re-lookup, because doing so would turn an observation after route selection into an artificial input.
+
+The report also keeps an explicit caveat: a correlated re-lookup proves what the kernel returns **for that observed selector state**. It does not by itself prove that Linux actually performed a reroute at that nftables hook.
 ## Evidence model
 
 The human report separates three levels:
@@ -296,7 +332,7 @@ route-explain trace 10.70.0.12 --json
 
 The main report JSON retains its existing schema version. Snapshot, diff, doctor, and trace payloads have their own schema/version markers.
 
-## What v0.3 still does not claim
+## What v0.4 still does not claim
 
 `route-explain` still does **not** automatically reconstruct:
 
@@ -323,7 +359,7 @@ Snapshots are flow-scoped specifically to avoid turning replay into an invented 
 - [x] WireGuard `AllowedIPs` context
 - [x] Tailscale peer/subnet-route context
 - [x] read-only nftables trace observation
-- [ ] correlate nft trace → observed mark/interface → kernel re-lookup → RPDB/FIB result
+- [x] correlate nft trace → observed mark/iif → kernel re-lookup → RPDB/FIB result
 - [ ] richer VRF/l3mdev explanation
 - [ ] conntrack/NAT correlation
 - [ ] opt-in assisted nft trace setup with explicit confirmation
@@ -337,7 +373,7 @@ ruff check .
 pytest
 ```
 
-See [`docs/design.md`](docs/design.md) for the evidence model, [`docs/positioning.md`](docs/positioning.md) for the product boundary, and [`docs/snapshots.md`](docs/snapshots.md) for snapshot semantics.
+See [`docs/design.md`](docs/design.md) for the evidence model, [`docs/positioning.md`](docs/positioning.md) for the product boundary, [`docs/snapshots.md`](docs/snapshots.md) for snapshot semantics, and [`docs/releasing.md`](docs/releasing.md) for the Trusted Publishing release flow.
 
 ## License
 
