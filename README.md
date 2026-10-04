@@ -2,6 +2,8 @@
 
 **`EXPLAIN`, but for the Linux routing stack.**
 
+By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/route-explain/)
+
 `route-explain` asks the running Linux kernel how it will route a flow, then explains the policy-routing, route-table, and overlay context around that decision.
 
 It is not a prettier `traceroute`. It is for questions like:
