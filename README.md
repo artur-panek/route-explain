@@ -4,65 +4,57 @@
 
 By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/route-explain/)
 
-`route-explain` asks the running Linux kernel how it will route a specific flow, then explains the routing-policy and FIB context around that decision.
+`route-explain` asks the running Linux kernel how it will route a specific flow, then explains the RPDB, FIB, namespace, and overlay context around that decision.
 
-It is not a prettier `traceroute`, and it does not reimplement the kernel's route selection in Python. It is for the annoying questions that appear when policy routing, multiple tables, VPNs and overlays all look plausible at once:
+It is not a prettier `traceroute`, and it does not reimplement the kernel's route selection in Python. It is for the annoying cases where policy routing, multiple tables, VPNs, containers, marks, and overlays all look plausible at once.
 
-- Why is this destination leaving through `eth0` instead of `tailscale0`?
-- Which routing table did the kernel actually select?
-- Which prefix won inside that table?
-- Does a more-specific route exist somewhere else?
-- Which `ip rule` selectors definitely match this flow, and which are still ambiguous?
-- Would a firewall mark, input interface or L4 port change the lookup?
+> Alpha software. v0.3 adds flow snapshots, replay/diff, network-namespace execution, `--why-not`, a routing doctor, WireGuard/Tailscale context, and read-only nftables trace observation.
 
-> Alpha software. v0.2 explains RPDB/FIB decisions with kernel-backed evidence. nftables, NAT and conntrack are intentionally reported as outside the current evidence boundary.
-
-## The useful bit
+## Quick example
 
 ```console
 $ route-explain 10.70.0.12 \
     --from 10.10.0.24 \
     --protocol tcp --sport 51123 --dport 443 \
-    --mark 0x42
+    --mark 0x42 \
+    --why-not tailscale0
+
 ROUTE-EXPLAIN
 flow:  tcp 10.70.0.12:443 from 10.10.0.24:51123
 meta:  mark=0x42
 
 Kernel decision
-  destination:    10.70.0.12
   matched prefix: default
-  route type:     unicast
-  via:            10.10.0.1
   dev:            eth0
-  source:         10.10.0.24
   table:          main
+
 Why this path
   KERNEL kernel resolved the flow through table main on eth0
-  KERNEL efibmatch selected prefix default in table main
-  INFO   policy rule selector(s) at priority 32766 match and reference the selected table
-  CHECK  a more-specific route exists in table 52: 10.70.0.0/24 via tailscale0; policy routing kept it out of the selected path
-  CHECK  firewall, NAT, conntrack, and packet-mark mutation are not traced; routing evidence stops at the FIB/RPDB boundary
+  KERNEL fibmatch selected prefix default in table main
+  CHECK  a more-specific route exists in table 52: 10.70.0.0/24 via tailscale0
 
-Policy-rule candidates
-  MATCH 32766: from all to all lookup main [selected table]
-  MATCH 32767: from all to all lookup default
-  note: MATCH means the selector matches, not that the rule necessarily terminated the RPDB walk
+WHY NOT tailscale0?
 
-Matching routes across all tables
-   10.70.0.0/24 dev tailscale0 table 52
- * default via 10.10.0.1 dev eth0 table main
+Route exists:
+  10.70.0.0/24 dev tailscale0 table 52
+
+But:
+  kernel selected table main on eth0
 ```
 
-The distinction is intentional: the selected route comes from the kernel's `ip route get`, the exact matched prefix comes from `fibmatch`, and routes in other tables are context. `route-explain` does not pretend that Linux evaluated those tables in longest-prefix order across the whole machine.
+The selected path is kernel evidence. Routes in other tables are context, not a fake simulation of the RPDB walk.
 
 ## Requirements
 
 - Linux
 - Python 3.11+
 - `iproute2` with JSON output
-- recent `iproute2` recommended for `fibmatch` and full flow selectors
+- `nsenter` from util-linux for `--pid` / `--container`
+- optional: `wg` for WireGuard peer context
+- optional: `tailscale` for host Tailscale context
+- optional: `nft` for runtime trace observation
 
-No root privileges are required for ordinary read-only lookups on a normal Linux host.
+Ordinary route lookups are read-only. Some namespace and nftables operations may require privileges depending on the host.
 
 ## Install from source
 
@@ -74,109 +66,226 @@ source .venv/bin/activate
 python -m pip install -e .
 ```
 
-## Usage
-
-Basic kernel lookup:
+## Core lookup
 
 ```bash
 route-explain 10.70.0.12
 ```
 
-Model a local TCP connection:
+Model a specific TCP flow:
 
 ```bash
 route-explain 10.70.0.12 \
   --source 10.10.0.24 \
   --protocol tcp \
   --sport 51123 \
-  --dport 443
+  --dport 443 \
+  --mark 0x42
 ```
 
-Model marked traffic:
+Supported kernel lookup context includes source, mark, TOS, incoming/output interface, VRF, protocol, and TCP/UDP ports.
+
+## Why not this route?
 
 ```bash
-route-explain 10.70.0.12 --mark 0x42
+route-explain 10.70.0.12 --why-not tailscale0
+route-explain 10.70.0.12 --why-not dev:wg0
+route-explain 10.70.0.12 --why-not table:52
 ```
 
-Model a forwarded packet arriving on an interface:
+`--why-not` checks whether a matching route exists on the requested device/table, shows relevant policy-rule candidates, and contrasts that context with the kernel-selected path.
+
+It deliberately does **not** claim to know a single “losing rule” unless there is runtime evidence for it.
+
+## Network namespaces and containers
+
+Run the same explanation inside an iproute2 namespace:
 
 ```bash
-route-explain 10.70.0.12 --from 10.10.0.24 --iif lan0
+route-explain 1.1.1.1 --netns blue
 ```
 
-Force an output device or VRF exactly as `ip route get` can:
+Enter an existing process network namespace:
 
 ```bash
-route-explain 203.0.113.10 --oif wg0
-route-explain 203.0.113.10 --vrf blue
+route-explain 1.1.1.1 --pid 18422
 ```
 
-Machine-readable output:
+Resolve a running Docker or Podman container and enter its network namespace:
+
+```bash
+route-explain 1.1.1.1 --container api
+```
+
+The same context switches are available to `snapshot`, `doctor`, and `trace`.
+
+## Snapshot and replay
+
+A snapshot is **flow-scoped**. It stores the kernel lookup for one flow plus the route/rule/link and overlay evidence used to explain it.
+
+```bash
+route-explain snapshot 10.70.0.12 --mark 0x42 > before.json
+route-explain replay before.json
+```
+
+Aliases are available for the earlier terminology:
+
+```bash
+route-explain capture 10.70.0.12 > case.json
+route-explain analyze case.json
+```
+
+Write directly to a file:
+
+```bash
+route-explain snapshot 10.70.0.12 -o case.json
+```
+
+Replay never asks the current kernel for a new decision. It rebuilds the report from the stored evidence.
+
+### Snapshot privacy
+
+Snapshots can contain internal IPs, route topology, interface names, WireGuard peer public keys/endpoints, and Tailscale metadata. They contain diagnostic state, not private keys, but you should still sanitize snapshots before attaching them to a public issue.
+
+## Before/after diff
+
+```bash
+route-explain snapshot 10.70.0.12 -o before.json
+
+# change a VPN, route or policy rule
+
+route-explain snapshot 10.70.0.12 -o after.json
+route-explain diff before.json after.json
+```
+
+Example:
+
+```text
+ROUTE-EXPLAIN DIFF
+
+ROUTING DECISION CHANGED
+  before:
+    table:  main
+    prefix: default
+    dev:    eth0
+  after:
+    table:  52
+    prefix: 10.70.0.0/24
+    dev:    tailscale0
+
+WHY
+  + routes: [...]
+  + rules: [...]
+```
+
+Diffs compare the selected decision plus route/rule set changes. If snapshots describe different flows, the output explicitly warns about it.
+
+## Routing doctor
+
+```bash
+route-explain doctor
+route-explain doctor --netns blue
+route-explain doctor --container api
+```
+
+Current doctor checks include:
+
+- non-standard route tables with no direct RPDB lookup rule
+- multiple default-route paths within the same address family
+- advanced RPDB selectors/modifiers
+- overlay-like interfaces
+- Docker/Podman/CNI bridge and veth context
+
+The doctor is intentionally conservative. It reports suspicious structure; it does not label every unusual topology as broken.
+
+## WireGuard and Tailscale context
+
+When available, snapshots and live explanations add overlay evidence:
+
+- WireGuard peer `AllowedIPs` containing the destination
+- Tailscale peer ownership of an exact Tailscale IP
+- Tailscale `PrimaryRoutes` / `AllowedIPs` containing the destination
+
+Tailscale daemon status is only collected in host context. `tailscale status` communicates through a Unix socket, so attributing host daemon state to a namespace/container would be misleading.
+
+## nftables runtime trace
+
+```bash
+sudo route-explain trace 10.70.0.12 \
+  --from 10.10.0.24 \
+  --seconds 5
+```
+
+This runs a **read-only** `nft -j monitor trace` observer and filters trace events for the supplied flow.
+
+Important: nftables only emits trace events for packets already marked for tracing, typically by a rule containing:
+
+```text
+meta nftrace set 1
+```
+
+`route-explain` does **not** inject that rule, change the ruleset, or generate packets automatically. If trace events expose packet marks, they are surfaced next to chain/rule/verdict context.
+
+## Evidence model
+
+The human report separates three levels:
+
+- **KERNEL** — direct `ip route get` / `fibmatch` evidence.
+- **INFO** — useful context derived from current route/rule/link/overlay state.
+- **CHECK** — ambiguity, a conflict, or an evidence boundary worth investigating.
+
+The project rule is simple: **unknown is better than confidently wrong**.
+
+## Machine-readable output
+
+Normal explain:
 
 ```bash
 route-explain 10.70.0.12 --json
 ```
 
-The JSON includes a `schema_version` field so scripts can reject incompatible future formats cleanly.
+Other workflows also support JSON where useful:
 
-## What v0.2 actually evaluates
+```bash
+route-explain replay case.json --json
+route-explain diff before.json after.json --json
+route-explain doctor --json
+route-explain trace 10.70.0.12 --json
+```
 
-The kernel lookup can include:
+The main report JSON retains its existing schema version. Snapshot, diff, doctor, and trace payloads have their own schema/version markers.
 
-- source and destination address
-- incoming and forced outgoing interface
-- firewall mark
-- TOS / DS field
-- VRF
-- IP protocol plus TCP/UDP source and destination ports
+## What v0.3 still does not claim
 
-For policy rules, `route-explain` currently evaluates source/destination prefixes plus `fwmark`/mask, `iif`, `oif`, `tos`, `ipproto`, `sport`, and `dport`. If a rule needs selector state you did not provide, it is shown as `MAYBE` rather than silently treated as a match.
+`route-explain` still does **not** automatically reconstruct:
 
-## Evidence model
+- every nftables/iptables traversal when `nftrace` is not enabled
+- NAT transformations end-to-end
+- conntrack state/correlation
+- where a packet mark originally came from unless trace evidence shows it
+- every advanced RPDB selector
+- suppressor/goto semantics as a complete RPDB execution trace
+- arbitrary offline route decisions for destinations that were not captured
 
-`route-explain` deliberately separates three kinds of statements:
-
-- **KERNEL** — directly backed by an `ip route get` / `fibmatch` result.
-- **INFO** — derived from current route/rule/link state without claiming it was the kernel's exact execution trace.
-- **CHECK** — an important limitation or conflict worth investigating.
-
-That split is the core design rule of the project: **unknown is better than confidently wrong**.
-
-## What it deliberately does not claim yet
-
-`route-explain` does **not** currently trace:
-
-- nftables/iptables rule traversal
-- NAT transformations
-- conntrack state
-- packet-mark changes performed before a later route lookup
-- every advanced RPDB selector (`uidrange`, `tun_id`, `l3mdev`, etc.)
-- suppressor semantics as a full RPDB execution trace
-
-Those layers are easy to render convincingly and still get wrong. Until they have evidence-backed collectors, they stay outside the verdict.
-
-## Design goals
-
-1. **Kernel decision first.** Ask Linux instead of cloning Linux routing logic in Python.
-2. **Exact FIB evidence.** Use `fibmatch` for the selected prefix when available.
-3. **Explain conflicts.** Surface more-specific routes and overlay paths that exist but lost due to policy context.
-4. **Honest ambiguity.** A rule with missing selector context is `MAYBE`, not green.
-5. **Machine-readable core.** Text output is a renderer over structured evidence.
-6. **Read-only by default.** Diagnostics should not mutate network state.
+Snapshots are flow-scoped specifically to avoid turning replay into an invented userspace routing simulator.
 
 ## Roadmap
 
-- [x] kernel-backed full-flow selectors (`mark`, `iif`, `oif`, ports, TOS, VRF)
+- [x] kernel-backed full-flow selectors
 - [x] `fibmatch` selected-prefix evidence
 - [x] selector-aware RPDB candidate evaluation
-- [ ] `route-explain diff` for before/after network changes
-- [ ] network namespace support
+- [x] `--why-not` device/table explanation
+- [x] flow-scoped snapshot + replay
+- [x] before/after `diff`
+- [x] network namespace / PID / Docker / Podman context
+- [x] routing `doctor`
+- [x] WireGuard `AllowedIPs` context
+- [x] Tailscale peer/subnet-route context
+- [x] read-only nftables trace observation
 - [ ] richer VRF/l3mdev explanation
-- [ ] Tailscale route-advertisement context
-- [ ] WireGuard peer `AllowedIPs` context
-- [ ] Docker/Podman bridge and namespace context
-- [ ] nftables trace evidence
 - [ ] conntrack/NAT correlation
+- [ ] opt-in assisted nft trace setup with explicit confirmation
+- [ ] richer snapshot redaction tooling
 
 ## Development
 
@@ -186,7 +295,7 @@ ruff check .
 pytest
 ```
 
-See [`docs/design.md`](docs/design.md) for the evidence model and the boundary between observation and inference.
+See [`docs/design.md`](docs/design.md) for the evidence model and [`docs/snapshots.md`](docs/snapshots.md) for snapshot semantics.
 
 ## License
 

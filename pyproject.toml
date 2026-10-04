@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "route-explain"
-version = "0.2.0"
-description = "Explain Linux routing decisions with kernel-backed RPDB and FIB evidence."
+version = "0.3.0"
+description = "Explain Linux routing decisions with kernel-backed RPDB, FIB, namespace and overlay evidence."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Artur Panek" }]
-keywords = ["linux", "networking", "routing", "iproute2", "policy-routing", "tailscale", "wireguard", "debugging", "cli"]
+keywords = ["linux", "networking", "routing", "iproute2", "policy-routing", "tailscale", "wireguard", "netns", "nftables", "debugging", "cli"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
@@ -33,10 +33,7 @@ Issues = "https://github.com/artur-panek/route-explain/issues"
 route-explain = "route_explain.cli:main"
 
 [project.optional-dependencies]
-dev = [
-  "pytest>=8.0",
-  "ruff>=0.7",
-]
+dev = ["pytest>=8.0", "ruff>=0.7"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/route_explain"]
