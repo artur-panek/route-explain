@@ -77,3 +77,31 @@ A future implementation should prefer runtime tracing and native rule representa
 The most dangerous output for a networking diagnostic tool is a confident green answer built from incomplete state.
 
 When evidence is incomplete, print `MAYBE`, `CHECK`, or “not evaluated”.
+
+
+## v0.3 execution contexts
+
+A live collector can run in one of four contexts:
+
+- host;
+- `ip netns exec NAME`;
+- `nsenter -t PID -n`;
+- Docker/Podman container resolved to its host PID, then entered with `nsenter`.
+
+Only the network namespace is entered. This matters for daemon-backed tooling: Tailscale status is intentionally host-only because a Unix socket in the host mount namespace could otherwise make host daemon state look like namespace-local state.
+
+## v0.3 snapshots and replay
+
+Snapshots are flow-scoped evidence bundles, not generic routing-state dumps.
+
+The captured `route_get` and `fibmatch` results remain the KERNEL evidence on replay. Route/rule/link/overlay data remains contextual evidence.
+
+This deliberately prevents replay from becoming an unverified userspace FIB/RPDB simulator.
+
+## v0.3 nftables tracing
+
+`route-explain trace` is observational.
+
+It starts `nft -j monitor trace`, filters events for the requested flow, and surfaces chain/rule/verdict/packet-mark information where present.
+
+It does not add `meta nftrace set 1`, modify the ruleset, or generate traffic. Automatic trace setup would be a mutation and therefore requires a future explicit opt-in workflow rather than happening behind a diagnostic command.
