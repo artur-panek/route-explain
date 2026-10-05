@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Project overview
+    url: https://artur.panek.tech/work/route-explain/
+    about: Read the project scope and evidence boundaries before opening an issue.

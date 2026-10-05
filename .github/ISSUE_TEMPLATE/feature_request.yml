@@ -1,0 +1,26 @@
+name: Feature request
+description: Propose a focused routing-forensics capability or evidence source
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What real Linux networking debugging problem would this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence source
+      description: Which kernel lookup, RPDB/FIB state, namespace, overlay, nftables trace, or other runtime evidence can support the result?
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Desired behavior
+      description: What should route-explain show or explain, and where should it remain uncertain?
+    validations:
+      required: true

@@ -1,0 +1,49 @@
+name: Bug report
+description: Report a reproducible routing, evidence, packaging, or CLI problem
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please sanitize diagnostics before posting them. Remove credentials, sensitive internal addresses/topology, VPN endpoints, and identifiers you do not want public.
+  - type: input
+    id: version
+    attributes:
+      label: route-explain version
+      placeholder: "route-explain --version"
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: "Ubuntu 24.04, kernel 6.x, iproute2 6.x, nftables 1.x"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The sanitized command that reproduces the issue.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Minimal sanitized evidence
+      description: Paste the smallest route-explain JSON/snapshot, iproute2 output, or nft trace fragment needed to reproduce the problem.
+      render: text
