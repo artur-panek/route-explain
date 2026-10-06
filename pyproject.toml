@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "route-explain"
-version = "0.4.1"
+version = "0.4.2"
 description = "Read-only, kernel-backed Linux routing forensics for explaining why a flow took its path."
 readme = "README.md"
 requires-python = ">=3.11"

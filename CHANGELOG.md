@@ -4,6 +4,11 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+## 0.4.2
+
+- fix documentation links in the package README so they resolve to GitHub when rendered on PyPI;
+- keep routing behavior unchanged from 0.4.1.
+
 ## 0.4.1
 
 - fix nftables tracing to consume the native `nft monitor trace` `trace id ...` stream instead of assuming JSON trace notifications;
