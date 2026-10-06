@@ -8,7 +8,7 @@ By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.pane
 
 It is intentionally **not** a routing controller, split-tunnel manager, background daemon, or userspace route simulator. It does not install routes, reconcile desired state, manage VPN policy, or replace the kernel with its own idea of what should have happened.
 
-> Alpha software. v0.4.1 fixes native nftables trace ingestion and makes explicit protocol selectors reach the kernel lookup even when no ports are supplied.
+> Alpha software. v0.4.2 is a documentation/metadata patch so the PyPI-rendered README links correctly to GitHub. Runtime routing behavior is unchanged from v0.4.1.
 
 ## Why this is different
 
