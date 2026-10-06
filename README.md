@@ -377,7 +377,7 @@ ruff check .
 pytest
 ```
 
-See [`docs/design.md`](docs/design.md) for the evidence model, [`docs/positioning.md`](docs/positioning.md) for the product boundary, [`docs/snapshots.md`](docs/snapshots.md) for snapshot semantics, and [`docs/releasing.md`](docs/releasing.md) for the Trusted Publishing release flow.
+See [`docs/design.md`](https://github.com/artur-panek/route-explain/blob/main/docs/design.md) for the evidence model, [`docs/positioning.md`](https://github.com/artur-panek/route-explain/blob/main/docs/positioning.md) for the product boundary, [`docs/snapshots.md`](https://github.com/artur-panek/route-explain/blob/main/docs/snapshots.md) for snapshot semantics, and [`docs/releasing.md`](https://github.com/artur-panek/route-explain/blob/main/docs/releasing.md) for the Trusted Publishing release flow.
 
 ## License
 
