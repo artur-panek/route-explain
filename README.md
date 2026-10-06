@@ -2,7 +2,7 @@
 
 **Kernel-backed Linux routing forensics. Ask why a flow took this path.**
 
-By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/route-explain/) · [PyPI](https://pypi.org/project/route-explain/) · [Releases](https://github.com/artur-panek/route-explain/releases)
+By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/route-explain/) · [Routing evidence note](https://artur.panek.tech/notes/linux-routing-kernel-evidence/) · [PyPI](https://pypi.org/project/route-explain/) · [Releases](https://github.com/artur-panek/route-explain/releases)
 
 `route-explain` is a **read-only Linux networking forensic CLI**. It asks the running kernel for the authoritative routing decision for a specific flow, then correlates RPDB, FIB, namespace, overlay, snapshot, and optional nftables trace evidence around that answer.
 
