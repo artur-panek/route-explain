@@ -2,13 +2,15 @@
 
 **Kernel-backed Linux routing forensics. Ask why a flow took this path.**
 
-By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/route-explain/) · [Routing evidence note](https://artur.panek.tech/notes/linux-routing-kernel-evidence/) · [PyPI](https://pypi.org/project/route-explain/) · [Releases](https://github.com/artur-panek/route-explain/releases)
+[![PyPI](https://img.shields.io/pypi/v/route-explain?style=flat-square&label=PyPI)](https://pypi.org/project/route-explain/) [![Python](https://img.shields.io/pypi/pyversions/route-explain?style=flat-square&label=Python)](https://pypi.org/project/route-explain/) [![CI](https://img.shields.io/github/actions/workflow/status/artur-panek/route-explain/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/artur-panek/route-explain/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
-`route-explain` is a **read-only Linux networking forensic CLI**. It asks the running kernel for the authoritative routing decision for a specific flow, then correlates RPDB, FIB, namespace, overlay, snapshot, and optional nftables trace evidence around that answer.
+`route-explain` is a read-only Linux networking forensic CLI. It asks the running kernel for the authoritative routing decision for a specific flow, then correlates RPDB, FIB, namespace, overlay, snapshot, and optional nftables trace evidence around that answer.
+
+[Project page](https://artur.panek.tech/work/route-explain/) · [Engineering note](https://artur.panek.tech/notes/linux-routing-kernel-evidence/) · [PyPI](https://pypi.org/project/route-explain/) · [Releases](https://github.com/artur-panek/route-explain/releases)
 
 It is intentionally **not** a routing controller, split-tunnel manager, background daemon, or userspace route simulator. It does not install routes, reconcile desired state, manage VPN policy, or replace the kernel with its own idea of what should have happened.
 
-> Alpha software. v0.4.2 is a documentation/metadata patch so the PyPI-rendered README links correctly to GitHub. Runtime routing behavior is unchanged from v0.4.1.
+> **Alpha software.** Public interfaces may still change; evidence boundaries are kept explicit rather than filled with simulated certainty.
 
 ## Why this is different
 
