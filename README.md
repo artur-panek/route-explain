@@ -1,18 +1,18 @@
 # route-explain
 
-**Kernel-backed Linux routing forensics. Ask why a flow took this path.**
+**Inspect the route Linux selects for a specific network flow.**
 
 [![PyPI](https://img.shields.io/pypi/v/route-explain?style=flat-square&label=PyPI)](https://pypi.org/project/route-explain/) [![Python](https://img.shields.io/pypi/pyversions/route-explain?style=flat-square&label=Python)](https://pypi.org/project/route-explain/) [![CI](https://img.shields.io/github/actions/workflow/status/artur-panek/route-explain/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/artur-panek/route-explain/actions/workflows/ci.yml) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
-`route-explain` is a read-only Linux networking forensic CLI. It asks the running kernel for the authoritative routing decision for a specific flow, then correlates RPDB, FIB, namespace, overlay, snapshot, and optional nftables trace evidence around that answer.
+`route-explain` asks the running Linux kernel which route it selects for a destination and the supplied flow parameters. It then shows the relevant policy rules, routing tables, network namespace and available WireGuard, Tailscale or nftables trace information.
 
 [Project page](https://artur.panek.tech/work/route-explain/) · [Engineering note](https://artur.panek.tech/notes/linux-routing-kernel-evidence/) · [PyPI](https://pypi.org/project/route-explain/) · [Releases](https://github.com/artur-panek/route-explain/releases)
 
-It is intentionally **not** a routing controller, split-tunnel manager, background daemon, or userspace route simulator. It does not install routes, reconcile desired state, manage VPN policy, or replace the kernel with its own idea of what should have happened.
+It reads routing state without installing routes, changing VPN policy or running a background service. It does not simulate the kernel's routing decision in userspace.
 
-> **Alpha software.** Public interfaces may still change; evidence boundaries are kept explicit rather than filled with simulated certainty.
+> **Alpha software.** Commands and output formats may change between releases. When information is missing, the report says so.
 
-## Why this is different
+## How it compares with other tools
 
 The project sits between low-level networking primitives and control-plane software:
 
@@ -35,7 +35,7 @@ The kernel remains the routing oracle. `ip route get` and `fibmatch` establish t
 - emulate the full Linux RPDB/FIB decision tree in userspace;
 - turn incomplete state into a confident verdict.
 
-That boundary is a feature: the tool is meant to help investigate a running system without becoming another component that can change the system being investigated.
+The tool is intended for troubleshooting. It does not change the routing configuration being investigated.
 
 ## Quick example
 
