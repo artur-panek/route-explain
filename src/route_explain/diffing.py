@@ -81,6 +81,9 @@ def diff_snapshots(
 
     return {
         "flow_changed": before.get("flow") != after.get("flow"),
+        "context_changed": before.get("context") != after.get("context"),
+        "host_changed": (before.get("host") or {}).get("node")
+        != (after.get("host") or {}).get("node"),
         "decision_changed": before_decision != after_decision,
         "before": before_decision,
         "after": after_decision,
@@ -124,6 +127,10 @@ def render_diff(diff: dict[str, Any]) -> str:
     lines = ["ROUTE-EXPLAIN DIFF", ""]
     if diff["flow_changed"]:
         lines.append("CHECK snapshots describe different flows")
+    if diff["context_changed"]:
+        lines.append("CHECK snapshots use different execution contexts")
+    if diff["host_changed"]:
+        lines.append("CHECK snapshots report different host names")
 
     lines.append(
         "ROUTING DECISION "

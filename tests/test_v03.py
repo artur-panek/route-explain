@@ -61,6 +61,32 @@ def test_snapshot_diff_detects_decision_change():
     assert "+ route: 10.70.0.0/24 dev tailscale0 table 52" in rendered
 
 
+def test_snapshot_diff_warns_when_context_changes():
+    before = _snapshot()
+    after = _snapshot()
+    after["context"] = {"kind": "netns", "value": "blue", "label": "netns blue"}
+
+    diff = diff_snapshots(before, after)
+
+    assert diff["decision_changed"] is False
+    assert diff["context_changed"] is True
+    assert diff["host_changed"] is False
+    assert "CHECK snapshots use different execution contexts" in render_diff(diff)
+
+
+def test_snapshot_diff_warns_when_host_name_changes():
+    before = _snapshot()
+    after = _snapshot()
+    after["host"] = {"node": "other-host", "kernel": "test"}
+
+    diff = diff_snapshots(before, after)
+
+    assert diff["decision_changed"] is False
+    assert diff["context_changed"] is False
+    assert diff["host_changed"] is True
+    assert "CHECK snapshots report different host names" in render_diff(diff)
+
+
 def test_why_not_surfaces_existing_route():
     report = report_from_snapshot(_snapshot())
     report.matching_routes.append(
