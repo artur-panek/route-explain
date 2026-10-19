@@ -120,6 +120,18 @@ def _range_matches(selector: Any, value: int | None) -> bool | None:
     return start <= value <= end
 
 
+def _rule_selectors(item: dict[str, Any]) -> dict[str, Any]:
+    selectors = {key: item[key] for key in SELECTOR_KEYS if key in item and key != "not"}
+    # iproute2 JSON splits port and UID ranges into separate bounds.
+    # Keep incomplete ranges visible so they cannot become unconditional matches.
+    for key, prefix in (("sport", "sport"), ("dport", "dport"), ("uidrange", "uid")):
+        start_key = f"{prefix}_start"
+        end_key = f"{prefix}_end"
+        if start_key in item or end_key in item:
+            selectors[key] = f"{item.get(start_key, '?')}-{item.get(end_key, '?')}"
+    return selectors
+
+
 def _selector_result(item: dict[str, Any], flow: Flow) -> tuple[bool | None, tuple[str, ...]]:
     """Return selector truth and selectors that could not be evaluated.
 
@@ -237,11 +249,11 @@ def parse_rules(flow: Flow, rules: list[dict[str, Any]]) -> list[PolicyRule]:
     for item in rules:
         source = _rule_prefix(item, "src", version)
         destination = _rule_prefix(item, "dst", version)
-        selector_result, unknown = _selector_result(item, flow)
+        selectors = _rule_selectors(item)
+        selector_result, unknown = _selector_result({**item, **selectors}, flow)
         if selector_result is False:
             continue
 
-        selectors = {key: item[key] for key in SELECTOR_KEYS if key in item and key != "not"}
         modifiers = {key: item[key] for key in MODIFIER_KEYS if key in item}
         if item.get("table") is not None:
             action = "lookup"
