@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import math
+import os
 import re
 import selectors
 import shutil
+import signal
 import subprocess
 import time
+from contextlib import suppress
 from typing import Any
 
 from .context import ExecutionContext
@@ -181,6 +185,8 @@ def collect_nft_trace(
     context: ExecutionContext,
     seconds: float = 3.0,
 ) -> list[dict[str, Any]]:
+    if not math.isfinite(seconds) or not 0 < seconds <= 60:
+        raise TraceError("seconds must be greater than 0 and at most 60")
     if shutil.which("nft") is None:
         raise TraceError("nft command not found")
 
@@ -192,48 +198,87 @@ def collect_nft_trace(
             argv,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            text=True,
+            bufsize=0,
         )
     except OSError as exc:
         raise TraceError(str(exc)) from exc
 
     deadline = time.monotonic() + seconds
     captured: list[dict[str, Any]] = []
-    selector = selectors.DefaultSelector()
-    if proc.stdout:
-        selector.register(proc.stdout, selectors.EVENT_READ)
+    pending = bytearray()
+    errors = bytearray()
+    stopped = False
 
-    try:
-        while time.monotonic() < deadline:
-            if proc.poll() is not None:
-                break
-            remaining = max(0.0, deadline - time.monotonic())
-            ready = selector.select(timeout=min(0.2, remaining))
-            if not ready:
-                continue
-            line = proc.stdout.readline() if proc.stdout else ""
-            if not line:
-                continue
+    def consume_stdout(data: bytes) -> None:
+        pending.extend(data)
+        while (newline := pending.find(b"\n")) >= 0:
+            line = pending[:newline].decode("utf-8", errors="replace")
+            del pending[:newline + 1]
             event = parse_native_trace_line(line)
             if event is not None:
                 captured.append(event)
-    finally:
-        selector.close()
+
+    try:
+        with selectors.DefaultSelector() as selector:
+            for name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr)):
+                if stream is not None:
+                    os.set_blocking(stream.fileno(), False)
+                    selector.register(stream, selectors.EVENT_READ, name)
+
+            while selector.get_map() and (remaining := deadline - time.monotonic()) > 0:
+                for key, _ in selector.select(timeout=remaining):
+                    try:
+                        chunk = os.read(key.fd, 65536)
+                    except BlockingIOError:
+                        continue
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                    elif key.data == "stdout":
+                        consume_stdout(chunk)
+                    else:
+                        errors.extend(chunk)
+
+        # EOF can be observed just before the process exits. Allow it to finish
+        # within the capture window before deciding that it needs termination.
+        if proc.poll() is None and (remaining := deadline - time.monotonic()) > 0:
+            with suppress(subprocess.TimeoutExpired):
+                proc.wait(timeout=remaining)
+
         if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=1)
-            except subprocess.TimeoutExpired:
+            stopped = True
+            with suppress(ProcessLookupError):
+                proc.terminate()
+        try:
+            stdout, stderr = proc.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            stopped = True
+            with suppress(ProcessLookupError):
                 proc.kill()
+            stdout, stderr = proc.communicate(timeout=1)
+        consume_stdout(stdout or b"")
+        errors.extend(stderr or b"")
+        if pending and not stopped:
+            event = parse_native_trace_line(pending.decode("utf-8", errors="replace"))
+            if event is not None:
+                captured.append(event)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise TraceError(f"nft monitor trace failed: {exc}") from exc
+    finally:
+        if proc.poll() is None:
+            with suppress(ProcessLookupError):
+                proc.kill()
+            with suppress(subprocess.TimeoutExpired):
                 proc.wait(timeout=1)
+        for stream in (proc.stdout, proc.stderr):
+            if stream is not None:
+                stream.close()
 
-    events = filter_flow_trace(captured, flow)
-    if proc.returncode not in {0, -15} and not events:
-        stderr = proc.stderr.read().strip() if proc.stderr else ""
-        if stderr:
-            raise TraceError(f"nft monitor trace failed: {stderr}")
+    expected_stop = stopped and proc.returncode in {-signal.SIGTERM, -signal.SIGKILL}
+    if proc.returncode != 0 and not expected_stop:
+        detail = errors.decode("utf-8", errors="replace").strip() or f"exit code {proc.returncode}"
+        raise TraceError(f"nft monitor trace failed: {detail}")
 
-    return events
+    return filter_flow_trace(captured, flow)
 
 
 def render_trace(events: list[dict[str, Any]]) -> str:
