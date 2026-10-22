@@ -4,6 +4,8 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+- include port and UID range changes in snapshot diffs and show both bounds in text output.
+
 ## 0.4.2
 
 - fix documentation links in the package README so they resolve to GitHub when rendered on PyPI;

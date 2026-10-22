@@ -1,3 +1,5 @@
+import pytest
+
 from route_explain.context import ContextError, ExecutionContext, resolve_context
 from route_explain.diffing import diff_snapshots, render_diff
 from route_explain.model import Route
@@ -72,6 +74,49 @@ def test_snapshot_diff_warns_when_context_changes():
     assert diff["context_changed"] is True
     assert diff["host_changed"] is False
     assert "CHECK snapshots use different execution contexts" in render_diff(diff)
+
+
+@pytest.mark.parametrize(
+    ("prefix", "selector"), [("sport", "sport"), ("dport", "dport"), ("uid", "uidrange")]
+)
+@pytest.mark.parametrize("bound", ["start", "end"])
+def test_snapshot_diff_detects_rule_range_changes(prefix, selector, bound):
+    before = _snapshot()
+    after = _snapshot()
+    for snapshot in (before, after):
+        snapshot["evidence"]["rules"][0].update(
+            {f"{prefix}_start": 0, f"{prefix}_end": 2000}
+        )
+    unchanged = diff_snapshots(before, after)
+    assert unchanged["rules_added"] == unchanged["rules_removed"] == []
+
+    after["evidence"]["rules"][0][f"{prefix}_{bound}"] += 1
+
+    diff = diff_snapshots(before, after)
+
+    assert diff["rules_removed"] == before["evidence"]["rules"]
+    assert diff["rules_added"] == after["evidence"]["rules"]
+    assert diff["decision_changed"] is False
+    rendered = render_diff(diff)
+    changed_range = "1-2000" if bound == "start" else "0-2001"
+    assert f"{selector}=0-2000" in rendered
+    assert f"{selector}={changed_range}" in rendered
+
+
+@pytest.mark.parametrize("selector", ["sport", "dport", "uidrange"])
+def test_snapshot_diff_keeps_legacy_rule_ranges(selector):
+    before = _snapshot()
+    after = _snapshot()
+    before["evidence"]["rules"][0][selector] = "1000-2000"
+    after["evidence"]["rules"][0][selector] = "1000-3000"
+
+    diff = diff_snapshots(before, after)
+
+    assert diff["rules_removed"] == before["evidence"]["rules"]
+    assert diff["rules_added"] == after["evidence"]["rules"]
+    rendered = render_diff(diff)
+    assert f"{selector}=1000-2000" in rendered
+    assert f"{selector}=1000-3000" in rendered
 
 
 def test_snapshot_diff_warns_when_host_name_changes():
