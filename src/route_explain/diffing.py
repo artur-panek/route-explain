@@ -18,7 +18,14 @@ _RULE_KEYS = (
     "oif",
     "ipproto",
     "sport",
+    "sport_start",
+    "sport_end",
     "dport",
+    "dport_start",
+    "dport_end",
+    "uidrange",
+    "uid_start",
+    "uid_end",
 )
 
 
@@ -114,8 +121,15 @@ def _rule_change(item: dict[str, Any]) -> str:
     destination = item.get("dst", "all")
     table = item.get("table", "unspecified")
     selectors = []
-    for key in ("fwmark", "fwmask", "iif", "oif", "ipproto", "sport", "dport"):
+    for key in ("fwmark", "fwmask", "iif", "oif", "ipproto"):
         if item.get(key) is not None:
+            selectors.append(f"{key}={item[key]}")
+    for key, prefix in (("sport", "sport"), ("dport", "dport"), ("uidrange", "uid")):
+        start_key = f"{prefix}_start"
+        end_key = f"{prefix}_end"
+        if start_key in item or end_key in item:
+            selectors.append(f"{key}={item.get(start_key, '?')}-{item.get(end_key, '?')}")
+        elif item.get(key) is not None:
             selectors.append(f"{key}={item[key]}")
     suffix = f" [{', '.join(selectors)}]" if selectors else ""
     return (
