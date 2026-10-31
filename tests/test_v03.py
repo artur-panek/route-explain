@@ -63,6 +63,51 @@ def test_snapshot_diff_detects_decision_change():
     assert "+ route: 10.70.0.0/24 dev tailscale0 table 52" in rendered
 
 
+@pytest.mark.parametrize("inverted_before", [False, True])
+def test_snapshot_diff_detects_rule_inversion(inverted_before):
+    before = _snapshot()
+    after = _snapshot()
+    for snapshot in (before, after):
+        snapshot["evidence"]["rules"][0]["src"] = "192.0.2.0/24"
+    inverted = before if inverted_before else after
+    # Native iproute2 JSON encodes inversion as a null-valued flag.
+    inverted["evidence"]["rules"][0]["not"] = None
+
+    diff = diff_snapshots(before, after)
+
+    assert diff["decision_changed"] is False
+    assert diff["rules_removed"] == before["evidence"]["rules"]
+    assert diff["rules_added"] == after["evidence"]["rules"]
+    rendered = render_diff(diff)
+    inverted_sign = "-" if inverted_before else "+"
+    plain_sign = "+" if inverted_before else "-"
+    assert f"{inverted_sign} rule: 32766: not from 192.0.2.0/24" in rendered
+    assert f"{plain_sign} rule: 32766: from 192.0.2.0/24" in rendered
+
+
+def test_snapshot_diff_keeps_positive_and_inverted_rules_distinct():
+    before = _snapshot()
+    after = _snapshot()
+    inverted = {**before["evidence"]["rules"][0], "not": None}
+    before["evidence"]["rules"].append(inverted)
+
+    diff = diff_snapshots(before, after)
+
+    assert diff["rules_removed"] == [inverted]
+    assert diff["rules_added"] == []
+
+
+def test_snapshot_diff_keeps_unchanged_inverted_rules():
+    before = _snapshot()
+    after = _snapshot()
+    for snapshot in (before, after):
+        snapshot["evidence"]["rules"][0]["not"] = None
+
+    diff = diff_snapshots(before, after)
+
+    assert diff["rules_added"] == diff["rules_removed"] == []
+
+
 def test_snapshot_diff_warns_when_context_changes():
     before = _snapshot()
     after = _snapshot()
