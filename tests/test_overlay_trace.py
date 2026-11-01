@@ -1,3 +1,5 @@
+import pytest
+
 from route_explain.model import Flow
 from route_explain.nfttrace import filter_flow_trace, parse_native_trace_line, render_trace
 from route_explain.overlay import overlay_evidence
@@ -133,3 +135,61 @@ def test_nft_trace_surfaces_mark_transition_and_cache_caveat():
     text = render_trace(parsed)
     assert "MARK changed: 0x0 -> 0x3" in text
     assert "changing the ruleset during capture" in text
+
+
+@pytest.mark.parametrize(
+    "packet_suffix,selectors",
+    [
+        ("", {"protocol": "tcp"}),
+        (" ip protocol tcp", {"protocol": "tcp", "source_port": 50000}),
+        (" ip protocol tcp", {"protocol": "tcp", "destination_port": 443}),
+        (" ip protocol udp", {"protocol": "tcp"}),
+        (" ip protocol tcp tcp sport 40000", {"source_port": 50000}),
+        (" ip protocol tcp tcp dport 80", {"destination_port": 443}),
+    ],
+)
+def test_flow_filter_requires_requested_packet_selectors(packet_suffix, selectors):
+    # Truncated/unsupported packet headers cannot identify a requested L4 flow.
+    packet = parse_native_trace_line(
+        'trace id abc ip filter input packet: iif "eth0" '
+        'ip saddr 192.0.2.1 ip daddr 192.0.2.2'
+        + packet_suffix
+    )
+    mark = parse_native_trace_line(
+        'trace id abc ip filter input verdict continue mark 0x42'
+    )
+    assert packet is not None and mark is not None
+    assert filter_flow_trace(
+        [packet, mark], Flow(destination="192.0.2.2", **selectors)
+    ) == []
+
+
+def test_flow_filter_still_accepts_address_only_packet_for_address_only_request():
+    packet = parse_native_trace_line(
+        'trace id abc ip filter input packet: iif "eth0" '
+        'ip saddr 192.0.2.1 ip daddr 192.0.2.2'
+    )
+    assert packet is not None
+    assert filter_flow_trace([packet], Flow(destination="192.0.2.2")) == [packet]
+
+
+@pytest.mark.parametrize("partial_id", ["abc", "def"])
+def test_flow_filter_needs_one_complete_matching_packet_in_each_trace(partial_id):
+    partial = parse_native_trace_line(
+        f'trace id {partial_id} ip filter input packet: iif "eth0" '
+        'ip saddr 192.0.2.1 ip daddr 192.0.2.2 ip protocol tcp'
+    )
+    complete = parse_native_trace_line(
+        'trace id def ip filter input packet: iif "eth0" '
+        'ip saddr 192.0.2.1 ip daddr 192.0.2.2 ip protocol tcp '
+        'tcp sport 50000 tcp dport 443'
+    )
+    mark = parse_native_trace_line(
+        'trace id def ip filter input verdict continue mark 0x42'
+    )
+    assert partial is not None and complete is not None and mark is not None
+    expected = [partial, complete, mark] if partial_id == "def" else [complete, mark]
+    assert filter_flow_trace(
+        [partial, complete, mark],
+        Flow(destination="192.0.2.2", protocol="tcp", source_port=50000, destination_port=443),
+    ) == expected
