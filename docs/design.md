@@ -125,6 +125,8 @@ This deliberately prevents replay from becoming an unverified userspace FIB/RPDB
 
 v0.4.1 consumes the native `nft monitor trace` stream. nftables emits related records with a shared trace ID: a packet record can contain the addresses, protocol, ports and interfaces needed to identify the flow, while later rule/policy/verdict records can contain the state transition of interest. route-explain first identifies matching packet trace IDs, then retains all records belonging to those IDs and normalizes them into its own stable trace schema.
 
+A packet record must contain and match every requested address, protocol and port before its trace ID is selected. Missing protocol or port evidence is not a wildcard. An incomplete packet header can still match an address-only request, but cannot establish a more specific flow; its related mark events are not used for correlation unless another packet record with the same trace ID establishes that flow.
+
 It does not add `meta nftrace set 1`, modify the ruleset, or generate traffic. Automatic trace setup would be a mutation and therefore requires a future explicit opt-in workflow rather than happening behind a diagnostic command.
 
 nftables reconstructs table/chain/rule text using ruleset state read when the monitor starts. If the ruleset changes while capture is running, printed rule text may become stale; this is a contextual limitation and is surfaced as a CHECK.
