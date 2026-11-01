@@ -11,8 +11,15 @@ _RULE_KEYS = (
     "priority",
     "not",
     "src",
+    "srclen",
     "dst",
+    "dstlen",
     "table",
+    "action",
+    "goto",
+    "nop",
+    "suppress_prefixlen",
+    "suppress_ifgroup",
     "fwmark",
     "fwmask",
     "iif",
@@ -52,12 +59,12 @@ def _index(
 ) -> dict[tuple[Any, ...], dict[str, Any]]:
     indexed: dict[tuple[Any, ...], dict[str, Any]] = {}
     for item in items:
-        # iproute2 encodes `not` as a null-valued flag; presence carries its meaning.
-        fingerprint = tuple(key in item if key == "not" else item.get(key) for key in keys)
+        # iproute2 encodes these flags as null; presence carries their meaning.
+        fingerprint = tuple(key in item if key in {"not", "nop"} else item.get(key) for key in keys)
         indexed[fingerprint] = {
             key: item.get(key)
             for key in keys
-            if item.get(key) is not None or (key == "not" and key in item)
+            if item.get(key) is not None or (key in {"not", "nop"} and key in item)
         }
     return indexed
 
@@ -117,14 +124,31 @@ def _route_change(item: dict[str, Any]) -> str:
     return " ".join(parts)
 
 
+def _rule_address(item: dict[str, Any], key: str) -> str:
+    address = str(item.get(key, "all"))
+    length = item.get(f"{key}len")
+    if length is not None and "/" not in address:
+        return f"{address}/{length}"
+    return address
+
+
 def _rule_change(item: dict[str, Any]) -> str:
     priority = item.get("priority", "?")
     inversion = "not " if "not" in item else ""
-    source = item.get("src", "all")
-    destination = item.get("dst", "all")
-    table = item.get("table", "unspecified")
+    source = _rule_address(item, "src")
+    destination = _rule_address(item, "dst")
+    actions = []
+    if item.get("table") is not None:
+        actions.append(f"lookup {item['table']}")
+    if item.get("goto") is not None:
+        actions.append(f"goto {item['goto']}")
+    elif "nop" in item:
+        actions.append("nop")
+    elif item.get("action") is not None:
+        actions.append(str(item["action"]))
+    action = " ".join(actions) or "lookup unspecified"
     selectors = []
-    for key in ("fwmark", "fwmask", "iif", "oif", "ipproto"):
+    for key in ("fwmark", "fwmask", "iif", "oif", "ipproto", "suppress_prefixlen", "suppress_ifgroup"):
         if item.get(key) is not None:
             selectors.append(f"{key}={item[key]}")
     for key, prefix in (("sport", "sport"), ("dport", "dport"), ("uidrange", "uid")):
@@ -136,7 +160,7 @@ def _rule_change(item: dict[str, Any]) -> str:
             selectors.append(f"{key}={item[key]}")
     suffix = f" [{', '.join(selectors)}]" if selectors else ""
     return (
-        f"{priority}: {inversion}from {source} to {destination} lookup {table}{suffix}"
+        f"{priority}: {inversion}from {source} to {destination} {action}{suffix}"
     )
 
 

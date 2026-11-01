@@ -4,6 +4,7 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+- preserve address prefix lengths, actions and suppressors in RPDB snapshot diffs.
 - detect policy-rule inversion changes in snapshot diffs and retain the native `not` flag in JSON and text output.
 - include port and UID range changes in snapshot diffs and show both bounds in text output.
 
