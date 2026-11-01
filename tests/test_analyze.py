@@ -173,3 +173,42 @@ def test_not_rule_inverts_the_combined_selector():
     assert rules[0].inverted is True
     assert rules[0].certainty == "match"
     assert rules[0].modifiers["suppress_prefixlen"] == 0
+
+
+def test_missing_fibmatch_does_not_imply_other_routes_are_more_specific():
+    report = build_report(
+        Flow(destination="192.0.2.10"),
+        route_get=[{"dst": "192.0.2.10", "dev": "eth0", "table": "main"}],
+        rules=[],
+        routes=[
+            {"dst": "default", "dev": "wg0", "table": 100},
+            {"dst": "192.0.2.0/24", "dev": "wg1", "table": 200},
+        ],
+        links=[],
+    )
+
+    assert report.decision.matched_prefix is None
+    assert any("exact selected route prefix is unknown" in note for note in report.notes)
+    assert any(
+        item.message == "matching route context also exists in table(s): 100, 200"
+        for item in report.evidence
+    )
+    assert all("more-specific" not in item.message for item in report.evidence)
+    assert all("policy routing kept" not in item.message for item in report.evidence)
+
+
+def test_known_host_route_does_not_imply_other_routes_are_more_specific():
+    report = build_report(
+        Flow(destination="192.0.2.10"),
+        route_get=[{"dst": "192.0.2.10", "dev": "eth0", "table": "main"}],
+        fibmatch=[{"dst": "192.0.2.10/32", "dev": "eth0", "table": "main"}],
+        rules=[],
+        routes=[{"dst": "192.0.2.0/24", "dev": "wg0", "table": 100}],
+        links=[],
+    )
+
+    assert any(
+        item.message == "matching route context also exists in table(s): 100"
+        for item in report.evidence
+    )
+    assert all("more-specific" not in item.message for item in report.evidence)

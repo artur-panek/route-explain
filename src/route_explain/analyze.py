@@ -388,7 +388,9 @@ def _build_evidence(
     competitors = [
         route
         for route in matching_routes
-        if route.table != decision.table and _route_prefixlen(route, version) > selected_prefixlen
+        if selected_prefixlen >= 0
+        and route.table != decision.table
+        and _route_prefixlen(route, version) > selected_prefixlen
     ]
     if competitors:
         best = max(competitors, key=lambda route: _route_prefixlen(route, version))
