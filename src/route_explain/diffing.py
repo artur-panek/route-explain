@@ -9,6 +9,7 @@ from .snapshot import report_from_snapshot
 _ROUTE_KEYS = ("dst", "gateway", "dev", "table", "metric", "type")
 _RULE_KEYS = (
     "priority",
+    "not",
     "src",
     "dst",
     "table",
@@ -51,11 +52,12 @@ def _index(
 ) -> dict[tuple[Any, ...], dict[str, Any]]:
     indexed: dict[tuple[Any, ...], dict[str, Any]] = {}
     for item in items:
-        fingerprint = tuple(item.get(key) for key in keys)
+        # iproute2 encodes `not` as a null-valued flag; presence carries its meaning.
+        fingerprint = tuple(key in item if key == "not" else item.get(key) for key in keys)
         indexed[fingerprint] = {
             key: item.get(key)
             for key in keys
-            if item.get(key) is not None
+            if item.get(key) is not None or (key == "not" and key in item)
         }
     return indexed
 
@@ -117,6 +119,7 @@ def _route_change(item: dict[str, Any]) -> str:
 
 def _rule_change(item: dict[str, Any]) -> str:
     priority = item.get("priority", "?")
+    inversion = "not " if "not" in item else ""
     source = item.get("src", "all")
     destination = item.get("dst", "all")
     table = item.get("table", "unspecified")
@@ -133,7 +136,7 @@ def _rule_change(item: dict[str, Any]) -> str:
             selectors.append(f"{key}={item[key]}")
     suffix = f" [{', '.join(selectors)}]" if selectors else ""
     return (
-        f"{priority}: from {source} to {destination} lookup {table}{suffix}"
+        f"{priority}: {inversion}from {source} to {destination} lookup {table}{suffix}"
     )
 
 
