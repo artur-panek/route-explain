@@ -46,6 +46,11 @@ A snapshot therefore stores the authoritative lookup itself.
 - route-set fingerprints;
 - RPDB rule fingerprints.
 
+Rule diffs retain native `srclen`/`dstlen` fields, table and terminal actions,
+`goto`, `nop`, and prefix/interface-group suppressors. Text output combines
+split address/length fields for readability; JSON retains the captured fields.
+These are changes to the recorded rule set, not a simulated RPDB execution trace.
+
 If the stored flows differ, the diff marks that fact as a CHECK.
 
 ## Sharing snapshots
