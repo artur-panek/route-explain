@@ -20,6 +20,7 @@ PROTOCOL_NUMBERS = {
 }
 SELECTOR_KEYS = {
     "tos",
+    "dscp", "dscp_mask", "flowlabel", "flowlabel_mask", "sport_mask", "dport_mask",
     "fwmark",
     "fwmask",
     "iif",
@@ -181,6 +182,17 @@ def _selector_result(item: dict[str, Any], flow: Flow) -> tuple[bool | None, tup
         else:
             results.append(flow.tos == rule_tos)
 
+    if "dscp" in item or "dscp_mask" in item:
+        dscp = _as_int(item.get("dscp"))
+        mask = _as_int(item.get("dscp_mask", 0x3f))
+        if dscp is None or mask is None or not (0 <= dscp <= 0x3f and 0 <= mask <= 0x3f) or flow.tos is None:
+            unknown.append("dscp")
+        else:
+            results.append(((flow.tos >> 2) & mask) == (dscp & mask))
+
+    if "flowlabel" in item or "flowlabel_mask" in item:
+        unknown.append("flowlabel")
+
     if "ipproto" in item:
         rule_proto = _protocol_number(item.get("ipproto"))
         flow_proto = _protocol_number(flow.protocol)
@@ -190,7 +202,11 @@ def _selector_result(item: dict[str, Any], flow: Flow) -> tuple[bool | None, tup
             results.append(rule_proto == flow_proto)
 
     for key, value in (("sport", flow.source_port), ("dport", flow.destination_port)):
-        if key in item:
+        if f"{key}_mask" in item:
+            # Masked ports are not ordinary ranges; preserve uncertainty until
+            # that native selector has an explicitly supported flow model.
+            unknown.append(key)
+        elif key in item:
             result = _range_matches(item[key], value)
             if result is None:
                 unknown.append(key)

@@ -4,6 +4,10 @@ All notable user-facing changes are documented here.
 
 ## Unreleased
 
+- retain native DSCP, flow-label and masked-port rule selectors; evaluate supported DSCP predicates and keep unsupported predicates indeterminate.
+- include route TOS, multipath members and rule TOS/selectors in semantic snapshot diffs while ignoring per-hop counters.
+- validate replay input structure, reject ambiguous duplicate keys and include the snapshot filename in input errors.
+
 - preserve address prefix lengths, actions and suppressors in RPDB snapshot diffs.
 - detect policy-rule inversion changes in snapshot diffs and retain the native `not` flag in JSON and text output.
 - include port and UID range changes in snapshot diffs and show both bounds in text output.
