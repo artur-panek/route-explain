@@ -19,22 +19,11 @@ A pending publisher creates the project on its first successful publish. It does
 1. Ensure `main` CI is green.
 2. Ensure `pyproject.toml` and `route_explain.__version__` contain the same version.
 3. Move release notes from `Unreleased` into a versioned changelog section.
-4. Create and publish a GitHub Release tagged exactly `vX.Y.Z`.
-5. The `Publish to PyPI` workflow:
-   - verifies the tag matches package metadata;
-   - builds wheel + sdist;
-   - runs `twine check`;
-   - installs the built wheel in a clean virtual environment;
-   - publishes with OIDC through the `pypi` GitHub environment.
-6. Verify the PyPI page and install with:
-   ```bash
-   pipx install route-explain
-   route-explain --version
-   ```
+4. After publication approval, create `release/vX.Y.Z` from the exact tested commit. Pushing this branch triggers publication; the branch must match the package version.
+5. The workflow builds wheel + sdist, checks metadata, smoke-tests the installed wheel, publishes through the `pypi` OIDC environment, then creates the matching GitHub Release.
+6. Verify `route-explain --version` from a fresh installation.
 
-## Why release publication is the trigger
-
-Publishing a GitHub Release is an explicit operator action. Normal pushes, pull requests and tags cannot upload to PyPI.
+Normal PR branches, main pushes and manually created tags/releases do not upload to PyPI. Candidate branches deliberately use a different name. Do not create a `release/v*` branch while merely preparing a candidate.
 
 ## Rollback
 
