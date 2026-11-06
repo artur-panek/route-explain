@@ -2,7 +2,7 @@
 
 All notable user-facing changes are documented here.
 
-## Unreleased
+## 0.4.3 — release candidate
 
 - retain native DSCP, flow-label and masked-port rule selectors; evaluate supported DSCP predicates and keep unsupported predicates indeterminate.
 - include route TOS, multipath members and rule TOS/selectors in semantic snapshot diffs while ignoring per-hop counters.
