@@ -6,9 +6,10 @@ from typing import Any
 
 from .snapshot import report_from_snapshot
 
-_ROUTE_KEYS = ("dst", "gateway", "dev", "table", "metric", "type")
+_ROUTE_KEYS = ("dst", "gateway", "dev", "table", "metric", "type", "tos", "nhid", "via", "nexthops")
 _RULE_KEYS = (
     "priority",
+    "tos", "dscp", "dscp_mask", "flowlabel", "flowlabel_mask", "sport_mask", "dport_mask",
     "not",
     "src",
     "srclen",
@@ -59,13 +60,16 @@ def _index(
 ) -> dict[tuple[Any, ...], dict[str, Any]]:
     indexed: dict[tuple[Any, ...], dict[str, Any]] = {}
     for item in items:
-        # iproute2 encodes these flags as null; presence carries their meaning.
-        fingerprint = tuple(key in item if key in {"not", "nop"} else item.get(key) for key in keys)
-        indexed[fingerprint] = {
+        projected = {
             key: item.get(key)
             for key in keys
             if item.get(key) is not None or (key in {"not", "nop"} and key in item)
         }
+        if "nexthops" in projected:
+            hops = [{key: hop[key] for key in ("gateway", "via", "dev", "weight", "flags", "nhid") if key in hop} for hop in projected["nexthops"]]
+            projected["nexthops"] = sorted(hops, key=lambda hop: json.dumps(hop, sort_keys=True))
+        fingerprint = (json.dumps(projected, sort_keys=True, separators=(",", ":")),)
+        indexed[fingerprint] = projected
     return indexed
 
 
@@ -121,6 +125,9 @@ def _route_change(item: dict[str, Any]) -> str:
         parts.append(f"metric {item['metric']}")
     if item.get("type") not in {None, "unicast"}:
         parts.append(f"type {item['type']}")
+    for key in ("tos", "nhid", "via", "nexthops"):
+        if key in item:
+            parts.append(f"{key}={json.dumps(item[key], sort_keys=True)}")
     return " ".join(parts)
 
 
@@ -148,7 +155,7 @@ def _rule_change(item: dict[str, Any]) -> str:
         actions.append(str(item["action"]))
     action = " ".join(actions) or "lookup unspecified"
     selectors = []
-    for key in ("fwmark", "fwmask", "iif", "oif", "ipproto", "suppress_prefixlen", "suppress_ifgroup"):
+    for key in ("tos", "dscp", "dscp_mask", "flowlabel", "flowlabel_mask", "sport_mask", "dport_mask", "fwmark", "fwmask", "iif", "oif", "ipproto", "suppress_prefixlen", "suppress_ifgroup"):
         if item.get(key) is not None:
             selectors.append(f"{key}={item[key]}")
     for key, prefix in (("sport", "sport"), ("dport", "dport"), ("uidrange", "uid")):
