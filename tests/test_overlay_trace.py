@@ -173,6 +173,34 @@ def test_flow_filter_still_accepts_address_only_packet_for_address_only_request(
     assert filter_flow_trace([packet], Flow(destination="192.0.2.2")) == [packet]
 
 
+@pytest.mark.parametrize(
+    "interfaces,selectors,matched",
+    [
+        ('iif "eth0"', {"iif": "eth1"}, False),
+        ('oif "eth0"', {"oif": "eth1"}, False),
+        ("", {"iif": "eth0"}, False),
+        ("", {"oif": "eth0"}, False),
+        ('iif "eth0"', {"iif": "eth0"}, True),
+        ('oif "eth1"', {"oif": "eth1"}, True),
+        ('iif "eth0" oif "eth1"', {"iif": "eth0", "oif": "eth1"}, True),
+        ('iif "eth0" oif "eth1"', {"iif": "eth0", "oif": "eth2"}, False),
+    ],
+)
+def test_flow_filter_requires_requested_interfaces(interfaces, selectors, matched):
+    packet = parse_native_trace_line(
+        f'trace id abc ip filter forward packet: {interfaces} '
+        'ip saddr 192.0.2.1 ip daddr 192.0.2.2'
+    )
+    mark = parse_native_trace_line(
+        'trace id abc ip filter forward verdict continue mark 0x42'
+    )
+    assert packet is not None and mark is not None
+    events = [packet, mark]
+    assert filter_flow_trace(
+        events, Flow(destination="192.0.2.2", **selectors)
+    ) == (events if matched else [])
+
+
 @pytest.mark.parametrize("partial_id", ["abc", "def"])
 def test_flow_filter_needs_one_complete_matching_packet_in_each_trace(partial_id):
     partial = parse_native_trace_line(

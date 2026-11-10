@@ -152,6 +152,10 @@ def _packet_matches_flow(event: dict[str, Any], flow: Flow) -> bool:
         return False
     if flow.protocol and packet.get("protocol") != flow.protocol:
         return False
+    if flow.iif and packet.get("iif") != flow.iif:
+        return False
+    if flow.oif and packet.get("oif") != flow.oif:
+        return False
     if (
         flow.source_port is not None
         and packet.get("sport") != flow.source_port
