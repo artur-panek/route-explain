@@ -197,6 +197,59 @@ def test_why_not_accepts_explicit_table_target():
     assert "Route exists" in explain_why_not(report, "table:52")
 
 
+@pytest.mark.parametrize("table", [253, 254, 255, 52])
+@pytest.mark.parametrize("prefix", ["", "table:"])
+def test_why_not_recognizes_selected_numeric_table(table, prefix):
+    report = report_from_snapshot(_snapshot(table=table))
+    report.matching_routes.clear()
+
+    text = explain_why_not(report, f"{prefix}{table}")
+
+    assert "It is selected for this lookup." in text
+
+
+@pytest.mark.parametrize("target", ["254", "table:254"])
+def test_why_not_finds_numeric_table_alias_and_its_rule(target):
+    snapshot = _snapshot(table=52)
+    snapshot["evidence"]["routes"].append(
+        {"dst": "10.70.0.0/24", "dev": "eth1", "table": 254}
+    )
+    snapshot["evidence"]["rules"].append(
+        {"priority": 32767, "src": "all", "dst": "all", "table": 254}
+    )
+    report = report_from_snapshot(snapshot)
+
+    text = explain_why_not(report, target)
+
+    assert "10.70.0.0/24 dev eth1 table main" in text
+    assert "MATCH rule 32767 references table main" in text
+    assert "kernel selected table 52" in text
+
+
+def test_why_not_explicit_device_does_not_match_table_alias():
+    report = report_from_snapshot(_snapshot())
+
+    assert "No matching route" in explain_why_not(report, "dev:254")
+
+
+@pytest.mark.parametrize("target", ["254", "dev:254"])
+def test_why_not_keeps_numeric_device_names(target):
+    report = report_from_snapshot(_snapshot(dev="254", table=52))
+
+    assert "It is selected for this lookup." in explain_why_not(report, target)
+    assert "No matching route" in explain_why_not(report, "table:254")
+
+
+def test_why_not_finds_numeric_device_without_aliasing_it():
+    report = report_from_snapshot(_snapshot())
+    report.matching_routes.append(Route("10.70.0.0/24", None, "254", "52"))
+
+    text = explain_why_not(report, "dev:254")
+
+    assert "10.70.0.0/24 dev 254 table 52" in text
+    assert "kernel selected table main" in text
+
+
 def test_context_prefixes():
     assert ExecutionContext().prefix() == []
     assert ExecutionContext("netns", "blue").prefix() == [
