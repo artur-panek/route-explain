@@ -1,19 +1,20 @@
 from __future__ import annotations
 
-from .model import Report, Route
+from .analyze import table_name
+from .model import Report, Route, RouteDecision
 
 
-def _matches_target(route: Route, target: str) -> bool:
+def _matches_target(route: Route | RouteDecision, target: str) -> bool:
     if target.startswith("table:"):
-        return route.table == target.split(":", 1)[1]
+        return route.table == table_name(target.split(":", 1)[1])
     if target.startswith("dev:"):
         return route.dev == target.split(":", 1)[1]
-    return route.dev == target or route.table == target
+    return route.dev == target or route.table == table_name(target)
 
 
 def explain_why_not(report: Report, target: str) -> str:
     selected = report.decision
-    if target in {selected.dev, selected.table, f"dev:{selected.dev}", f"table:{selected.table}"}:
+    if _matches_target(selected, target):
         return f"WHY NOT {target}?\n\nIt is selected for this lookup."
     routes = [route for route in report.matching_routes if _matches_target(route, target)]
     lines = [f"WHY NOT {target}?", ""]
