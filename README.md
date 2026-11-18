@@ -242,7 +242,7 @@ route-explain doctor --container api
 
 Current doctor checks include:
 
-- non-standard route tables with no direct RPDB lookup rule
+- non-standard route tables with no direct RPDB lookup rule in the same address family
 - multiple default-route paths within the same address family
 - advanced RPDB selectors/modifiers
 - overlay-like interfaces
