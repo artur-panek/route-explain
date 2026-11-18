@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from collections import defaultdict
+from collections import Counter
 from typing import Any
 
 from .collect import CollectionError, collect_links, collect_routes, collect_rules
@@ -22,7 +22,7 @@ def doctor(context: ExecutionContext) -> dict[str, Any]:
     links = collect_links(context=context)
     all_routes: list[dict[str, Any]] = []
     all_rules: list[dict[str, Any]] = []
-    routes_by_family: dict[str, list[dict[str, Any]]] = {}
+    routing_by_family: dict[str, tuple[list[dict[str, Any]], list[dict[str, Any]]]] = {}
 
     for family, destination in (
         ("ipv4", "192.0.2.1"),
@@ -40,32 +40,28 @@ def doctor(context: ExecutionContext) -> dict[str, Any]:
                 }
             )
             continue
-        routes_by_family[family] = family_routes
+        routing_by_family[family] = (family_routes, family_rules)
         all_routes.extend(family_routes)
         all_rules.extend(family_rules)
 
-    tables: dict[str, int] = defaultdict(int)
-    for route in all_routes:
-        tables[str(route.get("table", "main"))] += 1
-
-    referenced = {
-        str(rule.get("table"))
-        for rule in all_rules
-        if rule.get("table") is not None
-    }
     standard_tables = {"local", "main", "default", "255", "254", "253"}
-    for table, count in sorted(tables.items()):
-        if table not in standard_tables and table not in referenced:
-            findings.append(
-                {
-                    "level": "CHECK",
-                    "message": (
-                        f"table {table} has {count} route(s) but no direct RPDB lookup rule"
-                    ),
-                }
-            )
+    for family, (family_routes, family_rules) in routing_by_family.items():
+        tables = Counter(str(route.get("table", "main")) for route in family_routes)
+        referenced = {
+            str(rule["table"]) for rule in family_rules if rule.get("table") is not None
+        }
+        for table, count in sorted(tables.items()):
+            if table not in standard_tables and table not in referenced:
+                findings.append(
+                    {
+                        "level": "CHECK",
+                        "message": (
+                            f"{family} table {table} has {count} route(s) but no direct RPDB lookup rule"
+                        ),
+                    }
+                )
 
-    for family, family_routes in routes_by_family.items():
+    for family, (family_routes, _) in routing_by_family.items():
         distinct_defaults = {
             (
                 str(route.get("table", "main")),
