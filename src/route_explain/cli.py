@@ -46,7 +46,10 @@ def _port(value: str) -> int:
 
 def _uint(value: str, *, bits: int, label: str) -> int:
     try:
-        number = int(value, 0)
+        try:
+            number = int(value, 10)
+        except ValueError:
+            number = int(value, 0)
     except ValueError as exc:
         raise argparse.ArgumentTypeError(
             f"{label} must be an integer (decimal or 0x-prefixed)"
